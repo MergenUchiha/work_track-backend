@@ -1,0 +1,17 @@
+model OrderAuditLogs {
+  id           String   @id @default(uuid()) @db.Uuid
+
+  action       String   @db.VarChar(100)
+  oldValue     Json?   @db.JsonB  @map("old_value")
+  newValue     Json?   @db.JsonB  @map("new_value") 
+
+  createdAt    DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  orderId      String   @db.Uuid @map("order_id")
+  changedById  String   @db.Uuid @map("changed_by_id")
+
+  order        Orders    @relation(fields: [orderId], references: [id])
+  changedBy    Users     @relation(fields: [changedById], references: [id])
+
+  @@map("order_audit_logs")
+}

@@ -1,0 +1,23 @@
+model Orders {
+  id            String        @id @default(uuid()) @db.Uuid
+  title         String        @db.VarChar(255)
+  description   String?       @db.Text
+
+  status        OrderStatus   @default(NEW)
+  priority      OrderPriority @default(MEDIUM)
+
+  deadline      DateTime?     @db.Timestamptz(6)
+
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)  @map("created_at")
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(6)  @map("updated_at")
+
+  createdById   String        @db.Uuid @map("created_by_id")
+  assignedToId  String?       @db.Uuid @map("assigned_to_id")
+
+  createdBy     Users          @relation("CreatedOrders", fields: [createdById], references: [id])
+  assignedTo    Users?         @relation("AssignedOrders", fields: [assignedToId], references: [id])
+
+  auditLogs     OrderAuditLogs[]
+
+  @@map("orders")
+}

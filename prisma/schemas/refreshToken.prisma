@@ -1,0 +1,14 @@
+model RefreshTokens {
+  id         String   @id @default(uuid()) @db.Uuid
+
+  tokenHash  String   @db.VarChar(255)  @map("token_hash")
+  expiresAt  DateTime @db.Timestamptz(6) @map("expires_at")
+  revoked    Boolean  @default(false) @db.Boolean
+
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  userId     String   @db.Uuid @map("user_id")
+  user       Users     @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+}
