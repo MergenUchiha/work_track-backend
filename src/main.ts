@@ -11,14 +11,14 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true, // Удаляет свойства, не описанные в DTO
       forbidNonWhitelisted: true, // Выбрасывает ошибку при лишних свойствах
-      transform: true // Автоматически преобразует типы
-    })
+      transform: true, // Автоматически преобразует типы
+    }),
   );
 
   // Настройка CORS
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-    credentials: true
+    credentials: true,
   });
 
   // Swagger документация
@@ -28,6 +28,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .addTag('Authentication', 'Эндпоинты для аутентификации и авторизации')
+    .addTag('Users', 'Управление пользователями')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
