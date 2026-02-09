@@ -29,6 +29,7 @@ async function bootstrap() {
     .addBearerAuth()
     .addTag('Authentication', 'Эндпоинты для аутентификации и авторизации')
     .addTag('Users', 'Управление пользователями')
+    .addTag('Orders', 'Управление заказами')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
