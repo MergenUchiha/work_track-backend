@@ -1,3 +1,0 @@
-src/modules/orders/orders.service.ts(161,9): error TS2698: Spread types may only be created from object types.
-src/modules/orders/orders.service.ts(412,60): error TS2345: Argument of type 'OrderStatus' is not assignable to parameter of type '"IN_PROGRESS" | "DONE"'.
-  Type '"NEW"' is not assignable to type '"IN_PROGRESS" | "DONE"'.

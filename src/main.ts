@@ -30,6 +30,7 @@ async function bootstrap() {
     .addTag('Authentication', 'Эндпоинты для аутентификации и авторизации')
     .addTag('Users', 'Управление пользователями')
     .addTag('Orders', 'Управление заказами')
+    .addTag('Audit', 'Аудит и логирование действий')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

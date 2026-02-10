@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus, OrderPriority, UserRole, Prisma } from '@prisma/client';
+import { AuditsService } from '../audits/audits.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
@@ -25,14 +26,17 @@ const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditService: AuditsService,
+  ) {}
 
   /**
    * Создать новый заказ
    */
   async create(dto: CreateOrderDto, createdById: string, userRole: string) {
     // Только админы и менеджеры могут создавать заказы
-    if (!([UserRole.ADMIN, UserRole.MANAGER] as UserRole[]).includes(userRole as UserRole)) {
+    if (userRole !== UserRole.ADMIN && userRole !== UserRole.MANAGER) {
       throw new ForbiddenException('Только администраторы и менеджеры могут создавать заказы');
     }
 
@@ -110,16 +114,13 @@ export class OrdersService {
 
     // Формируем условия фильтрации
     const where: Prisma.OrdersWhereInput = {};
-    const andConditions: Prisma.OrdersWhereInput[] = [];
 
     // Обычные работники видят только свои заказы
     if (userRole === UserRole.WORKER) {
-      andConditions.push({
-        OR: [
-          { createdById: userId },
-          { assignedToId: userId },
-        ],
-      });
+      where.OR = [
+        { createdById: userId },
+        { assignedToId: userId },
+      ];
     }
 
     if (status) {
@@ -143,39 +144,32 @@ export class OrdersService {
     }
 
     if (search) {
-      andConditions.push({
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-        ],
-      });
-    }
-
-    if (andConditions.length > 0) {
-      where.AND = andConditions;
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     if (deadlineFrom || deadlineTo) {
-      where.deadline = {};
+      const deadlineFilter: Prisma.DateTimeFilter = {};
       if (deadlineFrom) {
-        where.deadline.gte = new Date(deadlineFrom);
+        deadlineFilter.gte = new Date(deadlineFrom);
       }
       if (deadlineTo) {
-        where.deadline.lte = new Date(deadlineTo);
+        deadlineFilter.lte = new Date(deadlineTo);
       }
+      where.deadline = deadlineFilter;
     }
 
     if (overdue) {
+      const existingDeadline = (where.deadline as Prisma.DateTimeFilter) || {};
       where.deadline = {
-        ...(where.deadline as Prisma.DateTimeFilter),
+        ...existingDeadline,
         lt: new Date(),
       };
-      // Применяем фильтр по статусу, только если он не был указан явно
-      if (!where.status) {
-        where.status = {
-          notIn: [OrderStatus.DONE, OrderStatus.CANCELLED],
-        };
-      }
+      where.status = {
+        notIn: [OrderStatus.DONE, OrderStatus.CANCELLED],
+      };
     }
 
     // Подсчитываем общее количество
@@ -267,7 +261,8 @@ export class OrdersService {
 
     // Только создатель или админ/менеджер могут обновлять заказ
     if (
-      !([UserRole.ADMIN, UserRole.MANAGER] as UserRole[]).includes(userRole as UserRole) &&
+      userRole !== UserRole.ADMIN &&
+      userRole !== UserRole.MANAGER &&
       order.createdBy.id !== userId
     ) {
       throw new ForbiddenException('Недостаточно прав для обновления заказа');
@@ -346,7 +341,7 @@ export class OrdersService {
     const order = await this.findOne(id, userId, userRole);
 
     // Только админы и менеджеры могут назначать исполнителей
-    if (!([UserRole.ADMIN, UserRole.MANAGER] as UserRole[]).includes(userRole as UserRole)) {
+    if (userRole !== UserRole.ADMIN && userRole !== UserRole.MANAGER) {
       throw new ForbiddenException('Только администраторы и менеджеры могут назначать исполнителей');
     }
 
@@ -423,7 +418,8 @@ export class OrdersService {
     if (
       ([OrderStatus.IN_PROGRESS, OrderStatus.DONE] as OrderStatus[]).includes(dto.status) &&
       order.assignedTo?.id !== userId &&
-      !([UserRole.ADMIN, UserRole.MANAGER] as UserRole[]).includes(userRole as UserRole)
+      userRole !== UserRole.ADMIN &&
+      userRole !== UserRole.MANAGER
     ) {
       throw new ForbiddenException(
         'Только назначенный исполнитель или менеджер может изменить статус на IN_PROGRESS или DONE',
@@ -478,7 +474,8 @@ export class OrdersService {
 
     // Только создатель или админ/менеджер могут отменять заказ
     if (
-      !([UserRole.ADMIN, UserRole.MANAGER] as UserRole[]).includes(userRole as UserRole) &&
+      userRole !== UserRole.ADMIN &&
+      userRole !== UserRole.MANAGER &&
       order.createdBy.id !== userId
     ) {
       throw new ForbiddenException('Недостаточно прав для отмены заказа');
@@ -603,7 +600,7 @@ export class OrdersService {
    */
   private checkAccessPermission(order: any, userId: string, userRole: string) {
     // Админы и менеджеры видят все заказы
-    if (([UserRole.ADMIN, UserRole.MANAGER] as UserRole[]).includes(userRole as UserRole)) {
+    if (userRole === UserRole.ADMIN || userRole === UserRole.MANAGER) {
       return;
     }
 
@@ -645,14 +642,12 @@ export class OrdersService {
     oldValue: any;
     newValue: any;
   }) {
-    await this.prisma.orderAuditLogs.create({
-      data: {
-        orderId: data.orderId,
-        action: data.action,
-        changedById: data.changedById,
-        oldValue: data.oldValue,
-        newValue: data.newValue,
-      },
+    await this.auditService.createLog({
+      orderId: data.orderId,
+      action: data.action,
+      changedById: data.changedById,
+      oldValue: data.oldValue,
+      newValue: data.newValue,
     });
   }
 
