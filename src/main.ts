@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import * as helmet from 'helmet';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -11,7 +11,6 @@ import { getCorsConfig } from './common/config/cors.config';
 import { helmetConfig } from './common/config/helmet.config';
 
 async function bootstrap() {
-  // Создаем приложение с custom logger
   const app = await NestFactory.create(AppModule, {
     logger: new CustomLoggerService('Bootstrap'),
     bufferLogs: true,
@@ -21,29 +20,28 @@ async function bootstrap() {
 
   // ===== SECURITY =====
 
-  // Helmet - защита HTTP headers
-  app.use(helmet.default(helmetConfig));
+  // FIX: Используем import helmet from 'helmet' (требует esModuleInterop: true в tsconfig)
+  // Было: import * as helmet from 'helmet' + helmet.default(helmetConfig)
+  app.use(helmet(helmetConfig));
   logger.log('✓ Helmet security headers configured');
 
-  // CORS - защита от cross-origin запросов
   app.enableCors(getCorsConfig());
   logger.log('✓ CORS configured');
 
   // ===== GLOBAL VALIDATION =====
 
-  // Глобальная валидация DTO с улучшенными настройками
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Удаляет свойства, не описанные в DTO
-      forbidNonWhitelisted: true, // Выбрасывает ошибку при лишних свойствах
-      transform: true, // Автоматически преобразует типы
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
       transformOptions: {
-        enableImplicitConversion: true, // Включает неявное преобразование типов
+        enableImplicitConversion: true,
       },
-      disableErrorMessages: process.env.NODE_ENV === 'production', // Скрываем детали в production
+      disableErrorMessages: process.env.NODE_ENV === 'production',
       validationError: {
-        target: false, // Не включаем target в ошибки валидации
-        value: false, // Не включаем value в ошибки валидации
+        target: false,
+        value: false,
       },
     }),
   );
@@ -51,20 +49,14 @@ async function bootstrap() {
 
   // ===== GLOBAL FILTERS & INTERCEPTORS =====
 
-  // Глобальный exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
   logger.log('✓ Global exception filter configured');
 
-  // Глобальные interceptors
-  app.useGlobalInterceptors(
-    new LoggingInterceptor(), // Логирование запросов/ответов
-    new TransformInterceptor(), // Трансформация ответов
-  );
+  app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
   logger.log('✓ Global interceptors configured');
 
   // ===== API PREFIX =====
 
-  // Устанавливаем глобальный префикс для всех роутов (кроме health checks)
   app.setGlobalPrefix('api', {
     exclude: ['health', 'health/live', 'health/ready', 'health/detailed'],
   });
@@ -82,6 +74,7 @@ async function bootstrap() {
       
       ## Аутентификация
       Используется JWT-based аутентификация с refresh токенами.
+      Access Token действует **15 минут**, Refresh Token — **7 дней**.
       
       ## Rate Limiting
       API защищено от чрезмерного использования:
@@ -106,7 +99,7 @@ async function bootstrap() {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         name: 'JWT',
-        description: 'Enter JWT token',
+        description: 'Enter JWT access token',
         in: 'header',
       },
       'JWT-auth',
@@ -123,23 +116,21 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document, {
     swaggerOptions: {
-      persistAuthorization: true, // Сохраняем авторизацию между обновлениями
-      docExpansion: 'none', // Сворачиваем все секции по умолчанию
-      filter: true, // Включаем поиск
-      showRequestDuration: true, // Показываем время выполнения запросов
-      tryItOutEnabled: true, // Включаем "Try it out" по умолчанию
-      tagsSorter: 'alpha', // Сортировка тегов по алфавиту
-      operationsSorter: 'alpha', // Сортировка операций по алфавиту
+      persistAuthorization: true,
+      docExpansion: 'none',
+      filter: true,
+      showRequestDuration: true,
+      tryItOutEnabled: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
     },
     customSiteTitle: 'WorkTrack API Docs',
-    customfavIcon: 'https://example.com/favicon.ico',
-    customCss: '.swagger-ui .topbar { display: none }', // Скрываем topbar
+    customCss: '.swagger-ui .topbar { display: none }',
   });
   logger.log('✓ Swagger documentation configured at /api/docs');
 
   // ===== GRACEFUL SHUTDOWN =====
 
-  // Настраиваем graceful shutdown
   app.enableShutdownHooks();
   logger.log('✓ Graceful shutdown hooks enabled');
 
@@ -157,7 +148,6 @@ async function bootstrap() {
   logger.log('='.repeat(60));
   logger.log('');
 
-  // Логируем при завершении работы
   process.on('SIGTERM', () => {
     logger.warn('SIGTERM signal received: closing HTTP server');
   });

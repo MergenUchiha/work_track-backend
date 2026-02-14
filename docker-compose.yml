@@ -1,0 +1,123 @@
+# =============================================================
+# WorkTrack Backend — docker-compose.yml
+# Полный production-стек: PostgreSQL + NestJS приложение
+# =============================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # PostgreSQL
+  # ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: worktrack-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-worktrack}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-worktrack_secret}
+      POSTGRES_DB:       ${POSTGRES_DB:-worktrack}
+      # Настройки производительности
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+
+    volumes:
+      # Персистентные данные БД
+      - postgres_data:/var/lib/postgresql/data
+      # init-скрипты запускаются при первом создании БД
+      # - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+
+    ports:
+      # Открываем порт ТОЛЬКО в dev. В prod — убрать или ограничить firewall
+      - "${POSTGRES_PORT:-5432}:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-worktrack} -d ${POSTGRES_DB:-worktrack}"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 10s
+
+    networks:
+      - worktrack-net
+
+  # ──────────────────────────────────────────────────────────
+  # WorkTrack NestJS Application
+  # ──────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # target: production — явно указываем финальный stage
+      target: production
+
+    container_name: worktrack-app
+    restart: unless-stopped
+
+    # Зависим от postgres: запускаемся только когда БД healthy
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT:     ${PORT:-3000}
+
+      # DATABASE_URL собирается из отдельных переменных
+      # чтобы не дублировать хост/порт/пользователя
+      DATABASE_URL: postgresql://${POSTGRES_USER:-worktrack}:${POSTGRES_PASSWORD:-worktrack_secret}@postgres:5432/${POSTGRES_DB:-worktrack}
+
+      # JWT
+      JWT_ACCESS_SECRET:    ${JWT_ACCESS_SECRET}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_SECRET:   ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+
+      # Прочее
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-10}
+      CORS_ORIGINS:  ${CORS_ORIGINS:-http://localhost:3001}
+      LOG_LEVEL:     ${LOG_LEVEL:-info}
+
+    ports:
+      - "${PORT:-3000}:3000"
+
+    volumes:
+      # Логи приложения сохраняем на хосте
+      - app_logs:/app/logs
+
+    healthcheck:
+      # /health/live — не проверяет БД, отвечает быстро
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health/live || exit 1"]
+      interval: 30s
+      timeout:  5s
+      retries:  3
+      start_period: 20s
+
+    networks:
+      - worktrack-net
+
+    # Лимиты ресурсов (опционально, раскомментить при необходимости)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1.0'
+    #       memory: 512M
+    #     reservations:
+    #       cpus: '0.25'
+    #       memory: 128M
+
+# ──────────────────────────────────────────────────────────────
+# Именованные тома
+# ──────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: worktrack-postgres-data
+  app_logs:
+    name: worktrack-app-logs
+
+# ──────────────────────────────────────────────────────────────
+# Сеть
+# ──────────────────────────────────────────────────────────────
+networks:
+  worktrack-net:
+    name: worktrack-network
+    driver: bridge

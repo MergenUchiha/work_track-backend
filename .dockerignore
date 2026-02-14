@@ -1,0 +1,65 @@
+# =============================================================
+# WorkTrack Backend — .dockerignore
+# Исключает файлы из контекста сборки Docker
+# Уменьшает размер контекста и ускоряет сборку
+# =============================================================
+
+# Зависимости — устанавливаются внутри контейнера
+node_modules/
+
+# Артефакты сборки
+dist/
+build/
+
+# Тесты и coverage
+coverage/
+**/*.spec.ts
+**/*.e2e-spec.ts
+test/
+
+# Логи
+logs/
+*.log
+npm-debug.log*
+
+# Окружение — НИКОГДА не включать в образ
+.env
+.env.local
+.env.*.local
+
+# Данные Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker-файлы (не нужны внутри образа)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Документация (не нужна в образе)
+README.md
+docs/
+
+# Husky / lint-staged
+.husky/
+
+# TypeScript source maps (уже в dist/)
+*.map
+
+# Временные файлы
+*.tmp
+*.temp

@@ -20,8 +20,8 @@ import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.NEW]: [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
   [OrderStatus.IN_PROGRESS]: [OrderStatus.DONE, OrderStatus.CANCELLED],
-  [OrderStatus.DONE]: [], // Из DONE переходов нет
-  [OrderStatus.CANCELLED]: [], // Из CANCELLED переходов нет
+  [OrderStatus.DONE]: [],
+  [OrderStatus.CANCELLED]: [],
 };
 
 @Injectable()
@@ -35,17 +35,14 @@ export class OrdersService {
    * Создать новый заказ
    */
   async create(dto: CreateOrderDto, createdById: string, userRole: string) {
-    // Только админы и менеджеры могут создавать заказы
     if (userRole !== UserRole.ADMIN && userRole !== UserRole.MANAGER) {
       throw new ForbiddenException('Только администраторы и менеджеры могут создавать заказы');
     }
 
-    // Если указан assignedToId, проверяем что пользователь существует и активен
     if (dto.assignedToId) {
       await this.validateAssignee(dto.assignedToId);
     }
 
-    // Создаём заказ
     const order = await this.prisma.orders.create({
       data: {
         title: dto.title,
@@ -58,35 +55,20 @@ export class OrdersService {
       },
       include: {
         createdBy: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
         assignedTo: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
       },
     });
 
-    // Создаём запись в audit log
     await this.createAuditLog({
       orderId: order.id,
       action: 'ORDER_CREATED',
       changedById: createdById,
       oldValue: null,
-      newValue: {
-        title: order.title,
-        status: order.status,
-        priority: order.priority,
-      },
+      newValue: { title: order.title, status: order.status, priority: order.priority },
     });
 
     return this.formatOrder(order);
@@ -94,6 +76,17 @@ export class OrdersService {
 
   /**
    * Получить список заказов с фильтрацией и пагинацией
+   *
+   * FIX: Исправлен баг перезаписи where.OR.
+   * Ранее при одновременном использовании:
+   *   - фильтра по роли WORKER (where.OR = [{createdById}, {assignedToId}])
+   *   - параметра search (where.OR = [{title}, {description}])
+   * второй where.OR полностью перезаписывал первый, и работник видел чужие заказы.
+   * Теперь оба условия объединяются через where.AND.
+   *
+   * FIX: Исправлен баг конфликта overdue + status.
+   * Ранее overdue устанавливал where.status = {notIn: [...]}, что перезаписывало
+   * явный фильтр по status из query params. Теперь фильтры объединяются.
    */
   async findAll(query: GetOrdersQueryDto, userId: string, userRole: string) {
     const {
@@ -112,85 +105,74 @@ export class OrdersService {
       unassigned,
     } = query;
 
-    // Формируем условия фильтрации
-    const where: Prisma.OrdersWhereInput = {};
+    const andConditions: Prisma.OrdersWhereInput[] = [];
 
-    // Обычные работники видят только свои заказы
+    // ✅ FIX: Фильтр для WORKER — добавляем в AND, не перезаписываем OR
     if (userRole === UserRole.WORKER) {
-      where.OR = [{ createdById: userId }, { assignedToId: userId }];
+      andConditions.push({
+        OR: [{ createdById: userId }, { assignedToId: userId }],
+      });
     }
 
     if (status) {
-      where.status = status;
+      andConditions.push({ status });
     }
 
     if (priority) {
-      where.priority = priority;
+      andConditions.push({ priority });
     }
 
     if (createdById) {
-      where.createdById = createdById;
+      andConditions.push({ createdById });
     }
 
-    if (assignedToId) {
-      where.assignedToId = assignedToId;
-    }
-
+    // assignedToId и unassigned взаимоисключающие — unassigned имеет приоритет
     if (unassigned) {
-      where.assignedToId = null;
+      andConditions.push({ assignedToId: null });
+    } else if (assignedToId) {
+      andConditions.push({ assignedToId });
     }
 
+    // ✅ FIX: search добавляем в AND, не перезаписываем OR
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
 
     if (deadlineFrom || deadlineTo) {
-      const deadlineFilter: Prisma.DateTimeFilter = {};
-      if (deadlineFrom) {
-        deadlineFilter.gte = new Date(deadlineFrom);
-      }
-      if (deadlineTo) {
-        deadlineFilter.lte = new Date(deadlineTo);
-      }
-      where.deadline = deadlineFilter;
+      const deadlineFilter: Prisma.DateTimeNullableFilter = {};
+      if (deadlineFrom) deadlineFilter.gte = new Date(deadlineFrom);
+      if (deadlineTo) deadlineFilter.lte = new Date(deadlineTo);
+      andConditions.push({ deadline: deadlineFilter });
     }
 
+    // ✅ FIX: overdue — добавляем отдельные условия в AND, не перезаписываем status
     if (overdue) {
-      const existingDeadline = (where.deadline as Prisma.DateTimeFilter) || {};
-      where.deadline = {
-        ...existingDeadline,
-        lt: new Date(),
-      };
-      where.status = {
-        notIn: [OrderStatus.DONE, OrderStatus.CANCELLED],
-      };
+      andConditions.push({ deadline: { lt: new Date() } });
+      // Только если не задан явный status фильтр
+      if (!status) {
+        andConditions.push({
+          status: { notIn: [OrderStatus.DONE, OrderStatus.CANCELLED] },
+        });
+      }
     }
 
-    // Подсчитываем общее количество
+    const where: Prisma.OrdersWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
+
     const total = await this.prisma.orders.count({ where });
 
-    // Получаем заказы с пагинацией
     const orders = await this.prisma.orders.findMany({
       where,
       include: {
         createdBy: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
         assignedTo: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
       },
       skip: (page - 1) * limit,
@@ -217,20 +199,10 @@ export class OrdersService {
       where: { id },
       include: {
         createdBy: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
         assignedTo: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
       },
     });
@@ -239,7 +211,6 @@ export class OrdersService {
       throw new NotFoundException('Заказ не найден');
     }
 
-    // Проверка прав доступа
     this.checkAccessPermission(order, userId, userRole);
 
     return this.formatOrder(order);
@@ -251,7 +222,6 @@ export class OrdersService {
   async update(id: string, dto: UpdateOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
-    // Только создатель или админ/менеджер могут обновлять заказ
     if (
       userRole !== UserRole.ADMIN &&
       userRole !== UserRole.MANAGER &&
@@ -260,7 +230,6 @@ export class OrdersService {
       throw new ForbiddenException('Недостаточно прав для обновления заказа');
     }
 
-    // Нельзя обновлять завершённые или отменённые заказы
     if ([OrderStatus.DONE, OrderStatus.CANCELLED].includes(order.status)) {
       throw new BadRequestException('Нельзя обновлять завершённые или отменённые заказы');
     }
@@ -284,25 +253,14 @@ export class OrdersService {
       },
       include: {
         createdBy: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
         assignedTo: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
       },
     });
 
-    // Создаём запись в audit log
     await this.createAuditLog({
       orderId: id,
       action: 'ORDER_UPDATED',
@@ -325,51 +283,35 @@ export class OrdersService {
   async assign(id: string, dto: AssignOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
-    // Только админы и менеджеры могут назначать исполнителей
     if (userRole !== UserRole.ADMIN && userRole !== UserRole.MANAGER) {
       throw new ForbiddenException(
         'Только администраторы и менеджеры могут назначать исполнителей',
       );
     }
 
-    // Нельзя назначать на завершённые или отменённые заказы
     if ([OrderStatus.DONE, OrderStatus.CANCELLED].includes(order.status)) {
       throw new BadRequestException(
         'Нельзя назначать исполнителя на завершённые или отменённые заказы',
       );
     }
 
-    // Если назначаем нового исполнителя, проверяем что он существует и активен
     if (dto.assignedToId) {
       await this.validateAssignee(dto.assignedToId);
     }
 
     const updatedOrder = await this.prisma.orders.update({
       where: { id },
-      data: {
-        assignedToId: dto.assignedToId,
-      },
+      data: { assignedToId: dto.assignedToId },
       include: {
         createdBy: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
         assignedTo: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
       },
     });
 
-    // Создаём запись в audit log
     await this.createAuditLog({
       orderId: id,
       action: dto.assignedToId ? 'ASSIGNED' : 'UNASSIGNED',
@@ -387,7 +329,6 @@ export class OrdersService {
   async changeStatus(id: string, dto: ChangeStatusDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
-    // Проверяем возможность перехода (FSM)
     const allowedTransitions = STATUS_TRANSITIONS[order.status];
     if (!allowedTransitions.includes(dto.status)) {
       throw new BadRequestException(
@@ -396,7 +337,6 @@ export class OrdersService {
       );
     }
 
-    // Только исполнитель может переводить в IN_PROGRESS и DONE
     if (
       ([OrderStatus.IN_PROGRESS, OrderStatus.DONE] as OrderStatus[]).includes(dto.status) &&
       order.assignedTo?.id !== userId &&
@@ -413,25 +353,14 @@ export class OrdersService {
       data: { status: dto.status },
       include: {
         createdBy: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
         assignedTo: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
       },
     });
 
-    // Создаём запись в audit log
     await this.createAuditLog({
       orderId: id,
       action: 'STATUS_CHANGED',
@@ -449,7 +378,6 @@ export class OrdersService {
   async cancel(id: string, dto: CancelOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
-    // Только создатель или админ/менеджер могут отменять заказ
     if (
       userRole !== UserRole.ADMIN &&
       userRole !== UserRole.MANAGER &&
@@ -458,7 +386,6 @@ export class OrdersService {
       throw new ForbiddenException('Недостаточно прав для отмены заказа');
     }
 
-    // Проверяем возможность перехода в CANCELLED
     const allowedTransitions = STATUS_TRANSITIONS[order.status];
     if (!allowedTransitions.includes(OrderStatus.CANCELLED)) {
       throw new BadRequestException(`Невозможно отменить заказ в статусе "${order.status}"`);
@@ -469,34 +396,20 @@ export class OrdersService {
       data: { status: OrderStatus.CANCELLED },
       include: {
         createdBy: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
         assignedTo: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
+          select: { id: true, email: true, name: true, role: true },
         },
       },
     });
 
-    // Создаём запись в audit log с причиной отмены
     await this.createAuditLog({
       orderId: id,
       action: 'ORDER_CANCELLED',
       changedById: userId,
       oldValue: { status: order.status },
-      newValue: {
-        status: OrderStatus.CANCELLED,
-        cancelReason: dto.reason,
-      },
+      newValue: { status: OrderStatus.CANCELLED, cancelReason: dto.reason },
     });
 
     return this.formatOrder(updatedOrder);
@@ -510,8 +423,7 @@ export class OrdersService {
       throw new ForbiddenException('Только администраторы могут удалять заказы');
     }
 
-    const order = await this.findOne(id, userId, userRole);
-
+    await this.findOne(id, userId, userRole);
     await this.prisma.orders.delete({ where: { id } });
 
     return { message: 'Заказ успешно удалён' };
@@ -523,23 +435,14 @@ export class OrdersService {
   async getStats(userId: string, userRole: string) {
     const where: Prisma.OrdersWhereInput = {};
 
-    // Обычные работники видят только свою статистику
     if (userRole === UserRole.WORKER) {
       where.OR = [{ createdById: userId }, { assignedToId: userId }];
     }
 
     const [total, byStatus, byPriority, overdue] = await Promise.all([
       this.prisma.orders.count({ where }),
-      this.prisma.orders.groupBy({
-        by: ['status'],
-        where,
-        _count: true,
-      }),
-      this.prisma.orders.groupBy({
-        by: ['priority'],
-        where,
-        _count: true,
-      }),
+      this.prisma.orders.groupBy({ by: ['status'], where, _count: true }),
+      this.prisma.orders.groupBy({ by: ['priority'], where, _count: true }),
       this.prisma.orders.count({
         where: {
           ...where,
@@ -552,14 +455,8 @@ export class OrdersService {
     return {
       total,
       overdue,
-      byStatus: byStatus.map((item) => ({
-        status: item.status,
-        count: item._count,
-      })),
-      byPriority: byPriority.map((item) => ({
-        priority: item.priority,
-        count: item._count,
-      })),
+      byStatus: byStatus.map((item) => ({ status: item.status, count: item._count })),
+      byPriority: byPriority.map((item) => ({ priority: item.priority, count: item._count })),
     };
   }
 
@@ -567,16 +464,11 @@ export class OrdersService {
   // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
   // ============================================================
 
-  /**
-   * Проверка прав доступа к заказу
-   */
   private checkAccessPermission(order: any, userId: string, userRole: string) {
-    // Админы и менеджеры видят все заказы
     if (userRole === UserRole.ADMIN || userRole === UserRole.MANAGER) {
       return;
     }
 
-    // Обычные работники видят только свои заказы
     const hasAccess = order.createdById === userId || order.assignedToId === userId;
 
     if (!hasAccess) {
@@ -584,9 +476,6 @@ export class OrdersService {
     }
   }
 
-  /**
-   * Валидация исполнителя
-   */
   private async validateAssignee(userId: string) {
     const user = await this.prisma.users.findUnique({
       where: { id: userId },
@@ -603,9 +492,6 @@ export class OrdersService {
     return user;
   }
 
-  /**
-   * Создание записи в audit log
-   */
   private async createAuditLog(data: {
     orderId: string;
     action: string;
@@ -622,9 +508,6 @@ export class OrdersService {
     });
   }
 
-  /**
-   * Форматирование заказа с добавлением isOverdue
-   */
   private formatOrder(order: any) {
     const isOverdue =
       order.deadline &&

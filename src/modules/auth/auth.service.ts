@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,7 +20,6 @@ export class AuthService {
    * Регистрация нового пользователя
    */
   async register(dto: RegisterDto) {
-    // Проверяем, существует ли пользователь с таким email
     const existingUser = await this.prisma.users.findUnique({
       where: { email: dto.email },
     });
@@ -34,17 +28,15 @@ export class AuthService {
       throw new ConflictException('Пользователь с таким email уже существует');
     }
 
-    // Хешируем пароль
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS') || 10;
     const passwordHash = await bcrypt.hash(dto.password, saltRounds);
 
-    // Создаём пользователя
     const user = await this.prisma.users.create({
       data: {
         email: dto.email,
         name: dto.name,
         passwordHash,
-        role: UserRole.WORKER, // По умолчанию WORKER
+        role: UserRole.WORKER,
         isActive: true,
       },
       select: {
@@ -58,7 +50,6 @@ export class AuthService {
       },
     });
 
-    // Генерируем токены
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
     return {
@@ -71,7 +62,6 @@ export class AuthService {
    * Вход пользователя
    */
   async login(dto: LoginDto) {
-    // Ищем пользователя
     const user = await this.prisma.users.findUnique({
       where: { email: dto.email },
     });
@@ -80,19 +70,16 @@ export class AuthService {
       throw new UnauthorizedException('Неверный email или пароль');
     }
 
-    // Проверяем пароль
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Неверный email или пароль');
     }
 
-    // Проверяем, активен ли аккаунт
     if (!user.isActive) {
       throw new UnauthorizedException('Аккаунт деактивирован');
     }
 
-    // Генерируем токены
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
     return {
@@ -113,7 +100,6 @@ export class AuthService {
    * Обновление токенов (refresh)
    */
   async refresh(refreshToken: string) {
-    // Проверяем JWT signature и срок действия
     let payload: any;
     try {
       payload = this.jwtService.verify(refreshToken, {
@@ -123,10 +109,8 @@ export class AuthService {
       throw new UnauthorizedException('Недействительный refresh токен');
     }
 
-    // Хешируем токен для поиска в БД
     const tokenHash = this.hashToken(refreshToken);
 
-    // Ищем токен в БД
     const storedToken = await this.prisma.refreshTokens.findFirst({
       where: {
         tokenHash,
@@ -138,17 +122,14 @@ export class AuthService {
       throw new UnauthorizedException('Refresh токен не найден');
     }
 
-    // Проверяем, не отозван ли токен
     if (storedToken.revoked) {
       throw new UnauthorizedException('Refresh токен был отозван');
     }
 
-    // Проверяем срок действия
     if (new Date() > storedToken.expiresAt) {
       throw new UnauthorizedException('Срок действия refresh токена истёк');
     }
 
-    // Получаем пользователя
     const user = await this.prisma.users.findUnique({
       where: { id: payload.sub },
     });
@@ -157,24 +138,21 @@ export class AuthService {
       throw new UnauthorizedException('Пользователь не найден или деактивирован');
     }
 
-    // Удаляем старый refresh токен (one-time use)
     await this.prisma.refreshTokens.delete({
       where: { id: storedToken.id },
     });
 
-    // Генерируем новую пару токенов
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
     return tokens;
   }
 
   /**
-   * Выход (logout) - отзываем refresh токен
+   * Выход (logout)
    */
   async logout(refreshToken: string) {
     const tokenHash = this.hashToken(refreshToken);
 
-    // Ищем и удаляем токен
     const storedToken = await this.prisma.refreshTokens.findFirst({
       where: { tokenHash },
     });
@@ -201,44 +179,44 @@ export class AuthService {
 
   /**
    * Генерация пары токенов (access + refresh)
+   *
+   * FIX: Использует корректные имена переменных из .env:
+   *   JWT_ACCESS_EXPIRES_IN (было: JWT_ACCESS_EXPIRATION)
+   *   JWT_REFRESH_EXPIRES_IN (было: JWT_REFRESH_EXPIRATION)
    */
   private async generateTokens(userId: string, email: string, role: UserRole) {
-    // Payload для Access Token
     const accessPayload = {
       sub: userId,
       email,
       role,
     };
 
-    // Генерируем Access Token
+    // ✅ FIX: JWT_ACCESS_EXPIRES_IN (соответствует .env.example)
+    const accessExpiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '15m';
     const accessToken = this.jwtService.sign(accessPayload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: (this.configService.get<string>('JWT_ACCESS_EXPIRATION') || '30m') as any,
+      expiresIn: accessExpiresIn as any,
     });
 
-    // Payload для Refresh Token
     const refreshPayload = {
       sub: userId,
-      tokenId: crypto.randomUUID(), // Уникальный ID для токена
+      tokenId: crypto.randomUUID(),
     };
 
-    // Генерируем Refresh Token
+    // ✅ FIX: JWT_REFRESH_EXPIRES_IN (соответствует .env.example)
+    const refreshExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
     const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '30d') as any,
+      expiresIn: refreshExpiresIn as any,
     });
 
-    // Хешируем refresh токен перед сохранением
     const tokenHash = this.hashToken(refreshToken);
 
-    // Вычисляем дату истечения
+    // ✅ FIX: Корректное вычисление даты истечения из JWT_REFRESH_EXPIRES_IN
     const expiresAt = new Date();
-    const expirationDays = parseInt(
-      this.configService.get<string>('JWT_REFRESH_EXPIRATION')?.replace('d', '') || '30',
-    );
+    const expirationDays = parseInt(refreshExpiresIn.replace('d', '') || '7');
     expiresAt.setDate(expiresAt.getDate() + expirationDays);
 
-    // Сохраняем refresh токен в БД
     await this.prisma.refreshTokens.create({
       data: {
         tokenHash,
@@ -253,9 +231,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * Хеширование токена (SHA-256)
-   */
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
