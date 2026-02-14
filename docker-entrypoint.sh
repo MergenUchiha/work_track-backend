@@ -56,8 +56,9 @@ wait_for_db() {
 run_migrations() {
     log_info "Running database migrations..."
 
-    # --schema указывает на папку (prismaSchemaFolder preview feature)
-    if node_modules/.bin/prisma migrate deploy --schema prisma/schemas; then
+    # FIX: Не используем --schema для prismaSchemaFolder
+    # Prisma автоматически найдёт схемы в prisma/schemas/
+    if node_modules/.bin/prisma migrate deploy; then
         log_info "Migrations applied successfully."
     else
         log_error "Migration failed. Exiting."

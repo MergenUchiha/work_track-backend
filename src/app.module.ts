@@ -8,6 +8,7 @@ import { UsersModule } from './modules/users/users.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { AuditsModule } from './modules/audits/audits.module';
 import { HealthModule } from './common/health/health.module';
+import { BotModule } from './bot/bot.module';
 import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { throttlerConfig } from './common/config/throttler.config';
@@ -31,6 +32,9 @@ import { throttlerConfig } from './common/config/throttler.config';
     OrdersModule,
     AuditsModule,
     HealthModule,
+
+    // Telegram Bot (опциональный модуль)
+    BotModule.forRoot(),
   ],
   providers: [
     // Глобальный guard для rate limiting

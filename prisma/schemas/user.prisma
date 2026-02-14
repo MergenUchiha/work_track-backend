@@ -5,6 +5,9 @@ model Users {
   passwordHash  String   @db.VarChar(255) @map("password_hash")
   role          UserRole
   isActive      Boolean  @default(true) @db.Boolean @map("is_active")
+  
+
+  telegramId    BigInt?  @unique @map("telegram_id")
 
   createdAt     DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
   updatedAt     DateTime @updatedAt @db.Timestamptz(6) @map("updated_at")
