@@ -43,3 +43,5 @@ lerna-debug.log*
 
 # Prisma
 prisma/migrations/
+
+work_track-postman-collection.json
