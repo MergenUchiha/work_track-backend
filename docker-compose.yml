@@ -64,7 +64,7 @@ services:
 
       # DATABASE_URL собирается из отдельных переменных
       # чтобы не дублировать хост/порт/пользователя
-      DATABASE_URL: postgresql://${POSTGRES_USER:-worktrack}:${POSTGRES_PASSWORD:-worktrack_secret}@postgres:5432/${POSTGRES_DB:-worktrack}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-worktrack}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-worktrack}
 
       # JWT
       JWT_ACCESS_SECRET:    ${JWT_ACCESS_SECRET}
