@@ -13,10 +13,10 @@ import { PrismaModule } from '../prisma/prisma.module';
     ConfigModule,
     PrismaModule,
     PassportModule,
-    JwtModule.register({}) // Конфигурация в strategies
+    JwtModule.register({}), // Конфигурация в strategies
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtAccessStrategy, JwtRefreshStrategy],
-  exports: [AuthService]
+  exports: [AuthService],
 })
 export class AuthModule {}

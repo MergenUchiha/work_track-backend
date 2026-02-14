@@ -18,12 +18,12 @@ export interface JwtAccessPayload {
 export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt-access') {
   constructor(
     private configService: ConfigService,
-    private prisma: PrismaService
+    private prisma: PrismaService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_ACCESS_SECRET')
+      secretOrKey: configService.get<string>('JWT_ACCESS_SECRET'),
     });
   }
 
@@ -40,8 +40,8 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt-access') 
         email: true,
         name: true,
         role: true,
-        isActive: true
-      }
+        isActive: true,
+      },
     });
 
     if (!user) {
@@ -56,7 +56,7 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt-access') 
     return {
       sub: payload.sub,
       email: payload.email,
-      role: payload.role
+      role: payload.role,
     };
   }
 }

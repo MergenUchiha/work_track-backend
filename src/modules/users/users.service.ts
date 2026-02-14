@@ -78,7 +78,15 @@ export class UsersService {
    * С пагинацией, фильтрацией и поиском
    */
   async getUsers(query: GetUsersQueryDto) {
-    const { page = 1, limit = 10, role, isActive, search, sortBy = 'createdAt', sortOrder = 'desc' } = query;
+    const {
+      page = 1,
+      limit = 10,
+      role,
+      isActive,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = query;
 
     // Формируем условия фильтрации
     const where: Prisma.UsersWhereInput = {};

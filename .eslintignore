@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.js.map
+
+# Prisma
+prisma/migrations/
+*.prisma
+
+# Tests
+coverage/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.log
+.DS_Store

@@ -27,13 +27,13 @@ export class UserResponseDto {
 export class AuthResponseDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'JWT Access Token (срок действия: 30 минут)'
+    description: 'JWT Access Token (срок действия: 30 минут)',
   })
   accessToken: string;
 
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'JWT Refresh Token (срок действия: 30 дней)'
+    description: 'JWT Refresh Token (срок действия: 30 дней)',
   })
   refreshToken: string;
 
@@ -44,13 +44,13 @@ export class AuthResponseDto {
 export class RefreshResponseDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'Новый JWT Access Token'
+    description: 'Новый JWT Access Token',
   })
   accessToken: string;
 
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'Новый JWT Refresh Token'
+    description: 'Новый JWT Refresh Token',
   })
   refreshToken: string;
 }

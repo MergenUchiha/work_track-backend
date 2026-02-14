@@ -1,11 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  NotFoundException,
-  ForbiddenException,
-  BadRequestException,
-} from '@nestjs/common';
+import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { OrderStatus, OrderPriority, UserRole } from '@prisma/client';
 
 describe('OrdersService', () => {
@@ -97,9 +93,9 @@ describe('OrdersService', () => {
     it('должен выбросить ForbiddenException для работника', async () => {
       const dto = { title: 'New Order' };
 
-      await expect(
-        service.create(dto as any, 'user-id-1', UserRole.WORKER),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.create(dto as any, 'user-id-1', UserRole.WORKER)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -116,17 +112,17 @@ describe('OrdersService', () => {
     it('должен выбросить NotFoundException если заказ не найден', async () => {
       mockPrismaService.orders.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.findOne('non-existent', 'user-id', UserRole.ADMIN),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('non-existent', 'user-id', UserRole.ADMIN)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('должен выбросить ForbiddenException если работник пытается посмотреть чужой заказ', async () => {
       mockPrismaService.orders.findUnique.mockResolvedValue(mockOrder);
 
-      await expect(
-        service.findOne('order-id-1', 'other-user', UserRole.WORKER),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.findOne('order-id-1', 'other-user', UserRole.WORKER)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -213,12 +209,7 @@ describe('OrdersService', () => {
       mockPrismaService.orders.findUnique.mockResolvedValue(order);
 
       await expect(
-        service.cancel(
-          'order-id-1',
-          { reason: 'Reason' },
-          'user-id-1',
-          UserRole.MANAGER,
-        ),
+        service.cancel('order-id-1', { reason: 'Reason' }, 'user-id-1', UserRole.MANAGER),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -259,12 +250,7 @@ describe('OrdersService', () => {
       mockPrismaService.users.findUnique.mockResolvedValue(user);
 
       await expect(
-        service.assign(
-          'order-id-1',
-          { assignedToId: 'user-id-3' },
-          'user-id-1',
-          UserRole.MANAGER,
-        ),
+        service.assign('order-id-1', { assignedToId: 'user-id-3' }, 'user-id-1', UserRole.MANAGER),
       ).rejects.toThrow(BadRequestException);
     });
   });

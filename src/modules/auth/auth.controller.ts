@@ -22,15 +22,15 @@ export class AuthController {
   @ApiResponse({
     status: 201,
     description: 'Пользователь успешно зарегистрирован',
-    type: AuthResponseDto
+    type: AuthResponseDto,
   })
   @ApiResponse({
     status: 409,
-    description: 'Пользователь с таким email уже существует'
+    description: 'Пользователь с таким email уже существует',
   })
   @ApiResponse({
     status: 400,
-    description: 'Некорректные данные'
+    description: 'Некорректные данные',
   })
   async register(@Body() dto: RegisterDto): Promise<AuthResponseDto> {
     return this.authService.register(dto);
@@ -45,11 +45,11 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: 'Успешный вход',
-    type: AuthResponseDto
+    type: AuthResponseDto,
   })
   @ApiResponse({
     status: 401,
-    description: 'Неверный email или пароль'
+    description: 'Неверный email или пароль',
   })
   async login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(dto);
@@ -65,11 +65,11 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: 'Токены успешно обновлены',
-    type: RefreshResponseDto
+    type: RefreshResponseDto,
   })
   @ApiResponse({
     status: 401,
-    description: 'Недействительный refresh токен'
+    description: 'Недействительный refresh токен',
   })
   async refresh(@Body() dto: RefreshDto): Promise<RefreshResponseDto> {
     return this.authService.refresh(dto.refreshToken);
@@ -88,9 +88,9 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Успешный выход из системы' }
-      }
-    }
+        message: { type: 'string', example: 'Успешный выход из системы' },
+      },
+    },
   })
   async logout(@Body() dto: RefreshDto) {
     return this.authService.logout(dto.refreshToken);
@@ -110,13 +110,13 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Все сессии завершены' }
-      }
-    }
+        message: { type: 'string', example: 'Все сессии завершены' },
+      },
+    },
   })
   @ApiResponse({
     status: 401,
-    description: 'Не авторизован'
+    description: 'Не авторизован',
   })
   async logoutAll(@CurrentUser('sub') userId: string) {
     return this.authService.logoutAll(userId);
@@ -132,11 +132,11 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: 'Профиль пользователя',
-    type: UserResponseDto
+    type: UserResponseDto,
   })
   @ApiResponse({
     status: 401,
-    description: 'Не авторизован'
+    description: 'Не авторизован',
   })
   getProfile(@CurrentUser() user: JwtPayload) {
     return user;

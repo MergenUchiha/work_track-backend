@@ -28,7 +28,7 @@ export class RolesGuard implements CanActivate {
     // Получаем роли из декоратора @Roles()
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),
-      context.getClass()
+      context.getClass(),
     ]);
 
     // Если роли не указаны - пропускаем
@@ -49,7 +49,7 @@ export class RolesGuard implements CanActivate {
 
     if (!hasRole) {
       throw new ForbiddenException(
-        `Доступ запрещён. Требуется одна из ролей: ${requiredRoles.join(', ')}`
+        `Доступ запрещён. Требуется одна из ролей: ${requiredRoles.join(', ')}`,
       );
     }
 

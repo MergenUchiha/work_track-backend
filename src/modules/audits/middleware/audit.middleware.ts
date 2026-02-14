@@ -2,6 +2,8 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { AuditsService } from '../audits.service';
 
+import { JwtPayload } from '../../auth/decorators/current-user.decorator';
+
 /**
  * Middleware для автоматического логирования HTTP запросов
  * Записывает информацию о методе, URL, пользователе и времени выполнения
@@ -33,7 +35,7 @@ export class AuditMiddleware implements NestMiddleware {
     // Обработка завершения запроса
     res.on('finish', async () => {
       const duration = Date.now() - startTime;
-      const user = req['user'];
+      const user = req['user'] as JwtPayload;
 
       // Логируем только для аутентифицированных пользователей
       if (user && this.shouldLog(req)) {

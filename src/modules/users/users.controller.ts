@@ -11,13 +11,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -69,10 +63,7 @@ export class UsersController {
     status: 409,
     description: 'Email уже используется',
   })
-  async updateProfile(
-    @CurrentUser('sub') userId: string,
-    @Body() dto: UpdateProfileDto,
-  ) {
+  async updateProfile(@CurrentUser('sub') userId: string, @Body() dto: UpdateProfileDto) {
     return this.usersService.updateProfile(userId, dto);
   }
 
@@ -125,10 +116,7 @@ export class UsersController {
     status: 403,
     description: 'Недостаточно прав',
   })
-  async getUserById(
-    @Param('id') userId: string,
-    @CurrentUser() currentUser: JwtPayload,
-  ) {
+  async getUserById(@Param('id') userId: string, @CurrentUser() currentUser: JwtPayload) {
     return this.usersService.getUserById(userId, currentUser.sub, currentUser.role);
   }
 
@@ -179,7 +167,8 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Заблокировать или разблокировать пользователя',
-    description: 'Доступно только администраторам. Нельзя изменить статус собственного аккаунта. При блокировке все refresh токены пользователя отзываются.',
+    description:
+      'Доступно только администраторам. Нельзя изменить статус собственного аккаунта. При блокировке все refresh токены пользователя отзываются.',
   })
   @ApiParam({
     name: 'id',
@@ -259,7 +248,8 @@ export class UsersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Удалить пользователя (деактивация)',
-    description: 'Доступно только администраторам. Выполняется мягкое удаление (isActive = false). Нельзя удалить собственный аккаунт.',
+    description:
+      'Доступно только администраторам. Выполняется мягкое удаление (isActive = false). Нельзя удалить собственный аккаунт.',
   })
   @ApiParam({
     name: 'id',
@@ -287,10 +277,7 @@ export class UsersController {
     status: 403,
     description: 'Недостаточно прав',
   })
-  async softDeleteUser(
-    @Param('id') userId: string,
-    @CurrentUser('sub') adminId: string,
-  ) {
+  async softDeleteUser(@Param('id') userId: string, @CurrentUser('sub') adminId: string) {
     return this.usersService.softDeleteUser(userId, adminId);
   }
 }

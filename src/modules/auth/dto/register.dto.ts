@@ -4,7 +4,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export class RegisterDto {
   @ApiProperty({
     example: 'user@example.com',
-    description: 'Email пользователя'
+    description: 'Email пользователя',
   })
   @IsEmail({}, { message: 'Некорректный формат email' })
   email: string;
@@ -13,7 +13,7 @@ export class RegisterDto {
     example: 'John Doe',
     description: 'Полное имя пользователя',
     minLength: 2,
-    maxLength: 255
+    maxLength: 255,
   })
   @IsString()
   @MinLength(2, { message: 'Имя должно содержать минимум 2 символа' })
@@ -23,12 +23,12 @@ export class RegisterDto {
   @ApiProperty({
     example: 'Password123!',
     description: 'Пароль (минимум 6 символов, должен содержать буквы и цифры)',
-    minLength: 6
+    minLength: 6,
   })
   @IsString()
   @MinLength(6, { message: 'Пароль должен содержать минимум 6 символов' })
   @Matches(/^(?=.*[A-Za-z])(?=.*\d)/, {
-    message: 'Пароль должен содержать минимум одну букву и одну цифру'
+    message: 'Пароль должен содержать минимум одну букву и одну цифру',
   })
   password: string;
 }

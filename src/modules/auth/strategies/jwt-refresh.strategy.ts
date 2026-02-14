@@ -20,7 +20,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
       jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_REFRESH_SECRET'),
-      passReqToCallback: true // Передаём req в validate
+      passReqToCallback: true, // Передаём req в validate
     });
   }
 
@@ -39,7 +39,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     return {
       sub: payload.sub,
       tokenId: payload.tokenId,
-      refreshToken // Сам токен для проверки хеша в БД
+      refreshToken, // Сам токен для проверки хеша в БД
     };
   }
 }

@@ -22,10 +22,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '@prisma/client';
-import {
-  GetAuditLogsQueryDto,
-  PaginatedAuditLogsDto,
-} from './dto/get-audit-logs-query.dto';
+import { GetAuditLogsQueryDto, PaginatedAuditLogsDto } from './dto/get-audit-logs-query.dto';
 import { AuditLogDto } from './dto/audit-log.dto';
 
 @ApiTags('Audit')
@@ -106,10 +103,7 @@ export class AuditsController {
     description: 'История действий пользователя',
     type: [AuditLogDto],
   })
-  async getUserLogs(
-    @Param('userId') userId: string,
-    @Query('limit') limit?: number,
-  ) {
+  async getUserLogs(@Param('userId') userId: string, @Query('limit') limit?: number) {
     return this.auditsService.getUserLogs(userId, limit);
   }
 
@@ -132,10 +126,7 @@ export class AuditsController {
     description: 'История моих действий',
     type: [AuditLogDto],
   })
-  async getMyActivity(
-    @CurrentUser('sub') userId: string,
-    @Query('limit') limit?: number,
-  ) {
+  async getMyActivity(@CurrentUser('sub') userId: string, @Query('limit') limit?: number) {
     return this.auditsService.getUserLogs(userId, limit);
   }
 
@@ -199,10 +190,7 @@ export class AuditsController {
       },
     },
   })
-  async getStats(
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
-  ) {
+  async getStats(@Query('dateFrom') dateFrom?: string, @Query('dateTo') dateTo?: string) {
     return this.auditsService.getActionStats(dateFrom, dateTo);
   }
 
@@ -253,10 +241,7 @@ export class AuditsController {
     status: 200,
     description: 'История изменений поля',
   })
-  async getFieldHistory(
-    @Param('orderId') orderId: string,
-    @Param('field') field: string,
-  ) {
+  async getFieldHistory(@Param('orderId') orderId: string, @Param('field') field: string) {
     return this.auditsService.getFieldHistory(orderId, field);
   }
 

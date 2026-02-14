@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 
@@ -53,10 +48,7 @@ export class AuditInterceptor implements NestInterceptor {
             responseData: this.sanitizeResponse(data),
           };
 
-          console.log(
-            '[Audit Interceptor - Response]',
-            JSON.stringify(responseLog, null, 2),
-          );
+          console.log('[Audit Interceptor - Response]', JSON.stringify(responseLog, null, 2));
         },
         error: (error) => {
           // Логируем ошибку
@@ -72,10 +64,7 @@ export class AuditInterceptor implements NestInterceptor {
             },
           };
 
-          console.error(
-            '[Audit Interceptor - Error]',
-            JSON.stringify(errorLog, null, 2),
-          );
+          console.error('[Audit Interceptor - Error]', JSON.stringify(errorLog, null, 2));
         },
       }),
     );

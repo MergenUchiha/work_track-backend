@@ -2,7 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
-  BadRequestException
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -18,7 +18,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    private configService: ConfigService
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -27,7 +27,7 @@ export class AuthService {
   async register(dto: RegisterDto) {
     // Проверяем, существует ли пользователь с таким email
     const existingUser = await this.prisma.users.findUnique({
-      where: { email: dto.email }
+      where: { email: dto.email },
     });
 
     if (existingUser) {
@@ -45,7 +45,7 @@ export class AuthService {
         name: dto.name,
         passwordHash,
         role: UserRole.WORKER, // По умолчанию WORKER
-        isActive: true
+        isActive: true,
       },
       select: {
         id: true,
@@ -54,8 +54,8 @@ export class AuthService {
         role: true,
         isActive: true,
         createdAt: true,
-        updatedAt: true
-      }
+        updatedAt: true,
+      },
     });
 
     // Генерируем токены
@@ -63,7 +63,7 @@ export class AuthService {
 
     return {
       ...tokens,
-      user
+      user,
     };
   }
 
@@ -73,7 +73,7 @@ export class AuthService {
   async login(dto: LoginDto) {
     // Ищем пользователя
     const user = await this.prisma.users.findUnique({
-      where: { email: dto.email }
+      where: { email: dto.email },
     });
 
     if (!user) {
@@ -104,8 +104,8 @@ export class AuthService {
         role: user.role,
         isActive: user.isActive,
         createdAt: user.createdAt,
-        updatedAt: user.updatedAt
-      }
+        updatedAt: user.updatedAt,
+      },
     };
   }
 
@@ -117,7 +117,7 @@ export class AuthService {
     let payload: any;
     try {
       payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET')
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
     } catch (error) {
       throw new UnauthorizedException('Недействительный refresh токен');
@@ -130,8 +130,8 @@ export class AuthService {
     const storedToken = await this.prisma.refreshTokens.findFirst({
       where: {
         tokenHash,
-        userId: payload.sub
-      }
+        userId: payload.sub,
+      },
     });
 
     if (!storedToken) {
@@ -150,7 +150,7 @@ export class AuthService {
 
     // Получаем пользователя
     const user = await this.prisma.users.findUnique({
-      where: { id: payload.sub }
+      where: { id: payload.sub },
     });
 
     if (!user || !user.isActive) {
@@ -159,7 +159,7 @@ export class AuthService {
 
     // Удаляем старый refresh токен (one-time use)
     await this.prisma.refreshTokens.delete({
-      where: { id: storedToken.id }
+      where: { id: storedToken.id },
     });
 
     // Генерируем новую пару токенов
@@ -176,12 +176,12 @@ export class AuthService {
 
     // Ищем и удаляем токен
     const storedToken = await this.prisma.refreshTokens.findFirst({
-      where: { tokenHash }
+      where: { tokenHash },
     });
 
     if (storedToken) {
       await this.prisma.refreshTokens.delete({
-        where: { id: storedToken.id }
+        where: { id: storedToken.id },
       });
     }
 
@@ -193,7 +193,7 @@ export class AuthService {
    */
   async logoutAll(userId: string) {
     await this.prisma.refreshTokens.deleteMany({
-      where: { userId }
+      where: { userId },
     });
 
     return { message: 'Все сессии завершены' };
@@ -207,25 +207,25 @@ export class AuthService {
     const accessPayload = {
       sub: userId,
       email,
-      role
+      role,
     };
 
     // Генерируем Access Token
     const accessToken = this.jwtService.sign(accessPayload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: (this.configService.get<string>('JWT_ACCESS_EXPIRATION') || '30m') as any
+      expiresIn: (this.configService.get<string>('JWT_ACCESS_EXPIRATION') || '30m') as any,
     });
 
     // Payload для Refresh Token
     const refreshPayload = {
       sub: userId,
-      tokenId: crypto.randomUUID() // Уникальный ID для токена
+      tokenId: crypto.randomUUID(), // Уникальный ID для токена
     };
 
     // Генерируем Refresh Token
     const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '30d') as any
+      expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '30d') as any,
     });
 
     // Хешируем refresh токен перед сохранением
@@ -234,7 +234,7 @@ export class AuthService {
     // Вычисляем дату истечения
     const expiresAt = new Date();
     const expirationDays = parseInt(
-      this.configService.get<string>('JWT_REFRESH_EXPIRATION')?.replace('d', '') || '30'
+      this.configService.get<string>('JWT_REFRESH_EXPIRATION')?.replace('d', '') || '30',
     );
     expiresAt.setDate(expiresAt.getDate() + expirationDays);
 
@@ -243,13 +243,13 @@ export class AuthService {
       data: {
         tokenHash,
         expiresAt,
-        userId
-      }
+        userId,
+      },
     });
 
     return {
       accessToken,
-      refreshToken
+      refreshToken,
     };
   }
 

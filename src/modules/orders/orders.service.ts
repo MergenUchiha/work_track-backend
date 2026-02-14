@@ -117,10 +117,7 @@ export class OrdersService {
 
     // Обычные работники видят только свои заказы
     if (userRole === UserRole.WORKER) {
-      where.OR = [
-        { createdById: userId },
-        { assignedToId: userId },
-      ];
+      where.OR = [{ createdById: userId }, { assignedToId: userId }];
     }
 
     if (status) {
@@ -251,12 +248,7 @@ export class OrdersService {
   /**
    * Обновить заказ
    */
-  async update(
-    id: string,
-    dto: UpdateOrderDto,
-    userId: string,
-    userRole: string,
-  ) {
+  async update(id: string, dto: UpdateOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
     // Только создатель или админ/менеджер могут обновлять заказ
@@ -270,9 +262,7 @@ export class OrdersService {
 
     // Нельзя обновлять завершённые или отменённые заказы
     if ([OrderStatus.DONE, OrderStatus.CANCELLED].includes(order.status)) {
-      throw new BadRequestException(
-        'Нельзя обновлять завершённые или отменённые заказы',
-      );
+      throw new BadRequestException('Нельзя обновлять завершённые или отменённые заказы');
     }
 
     const oldValues = {
@@ -332,17 +322,14 @@ export class OrdersService {
   /**
    * Назначить/снять исполнителя
    */
-  async assign(
-    id: string,
-    dto: AssignOrderDto,
-    userId: string,
-    userRole: string,
-  ) {
+  async assign(id: string, dto: AssignOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
     // Только админы и менеджеры могут назначать исполнителей
     if (userRole !== UserRole.ADMIN && userRole !== UserRole.MANAGER) {
-      throw new ForbiddenException('Только администраторы и менеджеры могут назначать исполнителей');
+      throw new ForbiddenException(
+        'Только администраторы и менеджеры могут назначать исполнителей',
+      );
     }
 
     // Нельзя назначать на завершённые или отменённые заказы
@@ -397,12 +384,7 @@ export class OrdersService {
   /**
    * Изменить статус заказа (FSM)
    */
-  async changeStatus(
-    id: string,
-    dto: ChangeStatusDto,
-    userId: string,
-    userRole: string,
-  ) {
+  async changeStatus(id: string, dto: ChangeStatusDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
     // Проверяем возможность перехода (FSM)
@@ -410,7 +392,7 @@ export class OrdersService {
     if (!allowedTransitions.includes(dto.status)) {
       throw new BadRequestException(
         `Невозможно изменить статус с "${order.status}" на "${dto.status}". ` +
-        `Допустимые переходы: ${allowedTransitions.join(', ') || 'нет'}`,
+          `Допустимые переходы: ${allowedTransitions.join(', ') || 'нет'}`,
       );
     }
 
@@ -464,12 +446,7 @@ export class OrdersService {
   /**
    * Отменить заказ с указанием причины
    */
-  async cancel(
-    id: string,
-    dto: CancelOrderDto,
-    userId: string,
-    userRole: string,
-  ) {
+  async cancel(id: string, dto: CancelOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
     // Только создатель или админ/менеджер могут отменять заказ
@@ -484,9 +461,7 @@ export class OrdersService {
     // Проверяем возможность перехода в CANCELLED
     const allowedTransitions = STATUS_TRANSITIONS[order.status];
     if (!allowedTransitions.includes(OrderStatus.CANCELLED)) {
-      throw new BadRequestException(
-        `Невозможно отменить заказ в статусе "${order.status}"`,
-      );
+      throw new BadRequestException(`Невозможно отменить заказ в статусе "${order.status}"`);
     }
 
     const updatedOrder = await this.prisma.orders.update({
@@ -550,10 +525,7 @@ export class OrdersService {
 
     // Обычные работники видят только свою статистику
     if (userRole === UserRole.WORKER) {
-      where.OR = [
-        { createdById: userId },
-        { assignedToId: userId },
-      ];
+      where.OR = [{ createdById: userId }, { assignedToId: userId }];
     }
 
     const [total, byStatus, byPriority, overdue] = await Promise.all([
@@ -605,8 +577,7 @@ export class OrdersService {
     }
 
     // Обычные работники видят только свои заказы
-    const hasAccess =
-      order.createdById === userId || order.assignedToId === userId;
+    const hasAccess = order.createdById === userId || order.assignedToId === userId;
 
     if (!hasAccess) {
       throw new ForbiddenException('Недостаточно прав для просмотра этого заказа');

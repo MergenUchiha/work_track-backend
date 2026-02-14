@@ -12,13 +12,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -60,10 +54,7 @@ export class OrdersController {
     status: 403,
     description: 'Недостаточно прав',
   })
-  async create(
-    @Body() dto: CreateOrderDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  async create(@Body() dto: CreateOrderDto, @CurrentUser() user: JwtPayload) {
     return this.ordersService.create(dto, user.sub, user.role);
   }
 
@@ -81,10 +72,7 @@ export class OrdersController {
     description: 'Список заказов',
     type: PaginatedOrdersDto,
   })
-  async findAll(
-    @Query() query: GetOrdersQueryDto,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  async findAll(@Query() query: GetOrdersQueryDto, @CurrentUser() user: JwtPayload) {
     return this.ordersService.findAll(query, user.sub, user.role);
   }
 
@@ -137,8 +125,7 @@ export class OrdersController {
   @Get(':id')
   @ApiOperation({
     summary: 'Получить заказ по ID',
-    description:
-      'Работники могут видеть только свои заказы. Админы и менеджеры видят все.',
+    description: 'Работники могут видеть только свои заказы. Админы и менеджеры видят все.',
   })
   @ApiParam({
     name: 'id',
@@ -157,10 +144,7 @@ export class OrdersController {
     status: 403,
     description: 'Недостаточно прав',
   })
-  async findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.ordersService.findOne(id, user.sub, user.role);
   }
 
@@ -331,10 +315,7 @@ export class OrdersController {
     status: 403,
     description: 'Недостаточно прав',
   })
-  async remove(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.ordersService.remove(id, user.sub, user.role);
   }
 }

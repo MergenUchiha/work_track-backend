@@ -33,5 +33,5 @@ export const CurrentUser = createParamDecorator(
     const user = request.user as JwtPayload;
 
     return data ? user?.[data] : user;
-  }
+  },
 );

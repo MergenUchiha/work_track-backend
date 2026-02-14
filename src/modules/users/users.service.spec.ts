@@ -1,7 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
 describe('UsersService', () => {
@@ -69,9 +74,7 @@ describe('UsersService', () => {
     it('должен выбросить NotFoundException если пользователь не найден', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(null);
 
-      await expect(service.getProfile('non-existent-id')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.getProfile('non-existent-id')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -79,11 +82,7 @@ describe('UsersService', () => {
     it('должен вернуть пользователя для админа', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(mockUser);
 
-      const result = await service.getUserById(
-        'user-id-1',
-        'admin-id',
-        UserRole.ADMIN,
-      );
+      const result = await service.getUserById('user-id-1', 'admin-id', UserRole.ADMIN);
 
       expect(result).toEqual(mockUser);
     });
@@ -91,11 +90,7 @@ describe('UsersService', () => {
     it('должен вернуть пользователя если это его собственный профиль', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(mockUser);
 
-      const result = await service.getUserById(
-        'user-id-1',
-        'user-id-1',
-        UserRole.WORKER,
-      );
+      const result = await service.getUserById('user-id-1', 'user-id-1', UserRole.WORKER);
 
       expect(result).toEqual(mockUser);
     });
