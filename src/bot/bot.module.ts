@@ -7,6 +7,8 @@ import { TasksHandler } from './handlers/tasks.handler';
 import { CreateTaskHandler } from './handlers/create-task.handler';
 import { MyTasksHandler } from './handlers/my-tasks.handler';
 import { CallbackHandler } from './handlers/callback.handler';
+import { ClearHandler } from './handlers/clear.handler';
+import { rememberMessage } from './sent-messages.store';
 import { PrismaModule } from 'src/modules/prisma/prisma.module';
 import { OrdersModule } from 'src/modules/orders/orders.module';
 import { UsersModule } from 'src/modules/users/users.module';
@@ -84,6 +86,33 @@ export class BotModule {
               launchOptions: {
                 dropPendingUpdates: true,
               },
+              // Registered here so it wraps ctx.reply before the handlers run;
+              // a bot.use() added later in the lifecycle never sees their calls.
+              middlewares: [
+                async (ctx: any, next: () => Promise<void>) => {
+                  const chatId = ctx.chat?.id;
+
+                  if (chatId) {
+                    // The incoming message too: Bot API allows deleting
+                    // incoming messages in private chats, so /clear can take
+                    // the user's commands with it.
+                    if (ctx.message?.message_id) {
+                      rememberMessage(chatId, ctx.message.message_id);
+                    }
+
+                    const reply = ctx.reply.bind(ctx);
+                    ctx.reply = async (...args: unknown[]) => {
+                      const message = await reply(...args);
+                      if (message?.message_id) {
+                        rememberMessage(chatId, message.message_id);
+                      }
+                      return message;
+                    };
+                  }
+
+                  await next();
+                },
+              ],
             };
 
             // Webhook mode, used in production behind HTTPS
@@ -120,6 +149,7 @@ export class BotModule {
         CreateTaskHandler,
         MyTasksHandler,
         CallbackHandler,
+        ClearHandler,
       ],
       exports: [BotService],
     };

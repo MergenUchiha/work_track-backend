@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Command, Update, Ctx, On } from 'nestjs-telegraf';
+import { Command, Update, Ctx, On, Next } from 'nestjs-telegraf';
 import { BotContext, BotService } from '../bot.service';
 import { OrderPriority, UserRole } from '@prisma/client';
 import { Markup } from 'telegraf';
@@ -57,20 +57,32 @@ export class CreateTaskHandler {
   }
 
   @Command('cancel')
-  async onCancel(ctx: BotContext) {
+  async onCancel(@Ctx() ctx: BotContext, @Next() next: () => Promise<void>) {
     const session = this.sessions.get(ctx.from!.id);
-    if (session) {
-      this.sessions.delete(ctx.from!.id);
-      await ctx.reply('❌ Order creation cancelled.');
-    } else {
-      await ctx.reply('ℹ️ There is no order being created right now.');
+
+    // Without a wizard in progress this /cancel belongs to another flow
+    // (cancelling an order, for instance), so hand it on.
+    if (!session) {
+      return next();
     }
+
+    this.sessions.delete(ctx.from!.id);
+    await ctx.reply('❌ Order creation cancelled.');
   }
 
   @On('text')
-  async onText(@Ctx() ctx: BotContext & { message: { text: string } }) {
+  async onText(
+    @Ctx() ctx: BotContext & { message: { text: string } },
+    @Next() next: () => Promise<void>,
+  ) {
     const session = this.sessions.get(ctx.from!.id);
-    if (!session) return;
+
+    // Telegraf stops the chain when a middleware returns without calling
+    // next(). Swallowing every message here hid the commands registered by
+    // handlers further down: /my, /profile and /stats never ran.
+    if (!session) {
+      return next();
+    }
 
     try {
       const text = ctx.message.text;
@@ -135,12 +147,20 @@ export class CreateTaskHandler {
   }
 
   @On('callback_query')
-  async onCallback(@Ctx() ctx: any) {
+  async onCallback(@Ctx() ctx: any, @Next() next: () => Promise<void>) {
     const callbackData = ctx.callbackQuery?.data;
-    if (!callbackData?.startsWith('priority_')) return;
+
+    // Only the priority buttons of this wizard belong here. Returning without
+    // next() swallowed every other callback, which is why the order buttons
+    // (Details, Cancel, Start, Complete) did nothing.
+    if (!callbackData?.startsWith('priority_')) {
+      return next();
+    }
 
     const session = this.sessions.get(ctx.from.id);
-    if (!session || session.step !== 'priority') return;
+    if (!session || session.step !== 'priority') {
+      return next();
+    }
 
     try {
       const priority = callbackData.replace('priority_', '') as OrderPriority;

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Action, Update, Ctx, On } from 'nestjs-telegraf';
+import { Action, Update, Ctx, On, Next } from 'nestjs-telegraf';
 import { BotService } from '../bot.service';
 import { OrderStatus } from '@prisma/client';
 import { OrdersService } from 'src/modules/orders/orders.service';
@@ -42,12 +42,11 @@ export class CallbackHandler {
       );
 
       await ctx.editMessageText(
-        `✅ <b>Order assigned to you</b>\n\n` +
-          `🔹 <b>${order.title}</b>\n` +
-          `📊 Status: ${this.botService.formatStatus(order.status)}\n\n` +
-          `You can start working on it now.\n` +
-          `Use /my to see your orders.`,
-        { parse_mode: 'HTML' },
+        `✅ <b>Order assigned to you</b>\n\n` + this.botService.formatOrderCard(order),
+        {
+          parse_mode: 'HTML',
+          reply_markup: this.botService.buildOrderKeyboard(order, user.role).reply_markup,
+        },
       );
 
       this.logger.log(`User ${user.id} took order ${orderId}`);
@@ -75,11 +74,11 @@ export class CallbackHandler {
       );
 
       await ctx.editMessageText(
-        `⚙️ <b>Order in progress</b>\n\n` +
-          `🔹 <b>${order.title}</b>\n` +
-          `📊 Status: ${this.botService.formatStatus(order.status)}\n\n` +
-          `Good luck! 💪`,
-        { parse_mode: 'HTML' },
+        `⚙️ <b>Order in progress</b>\n\n` + this.botService.formatOrderCard(order),
+        {
+          parse_mode: 'HTML',
+          reply_markup: this.botService.buildOrderKeyboard(order, user.role).reply_markup,
+        },
       );
 
       this.logger.log(`User ${user.id} started order ${orderId}`);
@@ -107,11 +106,11 @@ export class CallbackHandler {
       );
 
       await ctx.editMessageText(
-        `✅ <b>Order completed</b>\n\n` +
-          `🔹 <b>${order.title}</b>\n` +
-          `📊 Status: ${this.botService.formatStatus(order.status)}\n\n` +
-          `Nice work! 🎉`,
-        { parse_mode: 'HTML' },
+        `✅ <b>Order completed</b>\n\n` + this.botService.formatOrderCard(order),
+        {
+          parse_mode: 'HTML',
+          reply_markup: this.botService.buildOrderKeyboard(order, user.role).reply_markup,
+        },
       );
 
       if (order.createdBy.id !== user.id && order.createdBy.telegramId) {
@@ -165,12 +164,13 @@ export class CallbackHandler {
    * not belong to a pending cancellation, so other text handlers still work.
    */
   @On('text')
-  async onCancellationReason(@Ctx() ctx: any) {
+  async onCancellationReason(@Ctx() ctx: any, @Next() next: () => Promise<void>) {
     const telegramId = ctx.from?.id;
     const orderId = telegramId ? this.pendingCancellations.get(telegramId) : undefined;
 
+    // Not part of a cancellation: let the rest of the chain see the message.
     if (!orderId) {
-      return;
+      return next();
     }
 
     const reason: string = ctx.message?.text ?? '';
@@ -215,43 +215,43 @@ export class CallbackHandler {
     }
   }
 
-  /** Shows the full order card. */
-  @Action(/^details_(.+)$/)
-  async onDetails(@Ctx() ctx: any) {
+  /** Returns from the details view to the compact card. */
+  @Action(/^card_(.+)$/)
+  async onBackToCard(@Ctx() ctx: any) {
     try {
       await ctx.answerCbQuery();
 
       const orderId = ctx.match[1];
       const user = await this.botService.getOrCreateUser(ctx);
+      const order = await this.ordersService.findOne(orderId, user.id, user.role);
+
+      await ctx.editMessageText(this.botService.formatOrderCard(order), {
+        parse_mode: 'HTML',
+        reply_markup: this.botService.buildOrderKeyboard(order, user.role).reply_markup,
+      });
+    } catch (error) {
+      this.logger.error(`Error in back action: ${error.message}`, error.stack);
+      await ctx.answerCbQuery('❌ Could not reload the order');
+    }
+  }
+
+  /** Shows the full order card. */
+  @Action(/^details_(\d+)_(.+)$/)
+  async onDetails(@Ctx() ctx: any) {
+    try {
+      await ctx.answerCbQuery();
+
+      const fromPage = Number(ctx.match[1]);
+      const orderId = ctx.match[2];
+      const user = await this.botService.getOrCreateUser(ctx);
 
       const order = await this.ordersService.findOne(orderId, user.id, user.role);
 
-      const isOverdue = this.botService.isOverdue(order.deadline, order.status);
-      const overdueWarning = isOverdue ? '\n⚠️ <b>OVERDUE</b>' : '';
-
-      const detailsMessage = `
-📄 <b>Order details</b>
-
-<b>Title:</b>
-${order.title}
-
-<b>Description:</b>
-${order.description || '<i>not provided</i>'}
-
-📊 <b>Status:</b> ${this.botService.formatStatus(order.status)}
-🎯 <b>Priority:</b> ${this.botService.formatPriority(order.priority)}
-${order.deadline ? `⏰ <b>Deadline:</b> ${this.botService.formatDate(order.deadline)}${overdueWarning}` : ''}
-
-👤 <b>Created by:</b> ${order.createdBy.name} (${order.createdBy.email})
-${order.assignedTo ? `👷 <b>Assignee:</b> ${order.assignedTo.name} (${order.assignedTo.email})` : '👷 <b>Assignee:</b> <i>unassigned</i>'}
-
-📅 <b>Created:</b> ${this.botService.formatDate(order.createdAt)}
-📝 <b>Updated:</b> ${this.botService.formatDate(order.updatedAt)}
-
-<code>ID: ${order.id}</code>
-      `.trim();
-
-      await ctx.editMessageText(detailsMessage, { parse_mode: 'HTML' });
+      await ctx.editMessageText(this.botService.formatOrderDetails(order), {
+        parse_mode: 'HTML',
+        reply_markup: this.botService.buildOrderKeyboard(order, user.role, 'details', fromPage)
+          .reply_markup,
+      });
 
       this.logger.log(`User ${user.id} viewed details of order ${orderId}`);
     } catch (error) {

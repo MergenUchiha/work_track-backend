@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Command, Update } from 'nestjs-telegraf';
 import { BotContext, BotService } from '../bot.service';
-import { Markup } from 'telegraf';
 import { OrdersService } from 'src/modules/orders/orders.service';
 
 @Update()
@@ -60,27 +59,33 @@ export class MyTasksHandler {
         return;
       }
 
-      let message = '📝 <b>My orders</b>\n\n';
-
+      const summary = ['📝 <b>My orders</b>', ''];
       if (totalCreated > 0) {
-        message += `📤 <b>Created by me:</b> ${totalCreated}\n`;
+        summary.push(`📤 Created by me: <b>${totalCreated}</b>`);
       }
-
       if (totalAssigned > 0) {
-        message += `👷 <b>Assigned to me:</b> ${totalAssigned}\n`;
+        summary.push(`👷 Assigned to me: <b>${totalAssigned}</b>`);
       }
 
-      await ctx.reply(message, { parse_mode: 'HTML' });
+      await ctx.reply(summary.join('\n'), { parse_mode: 'HTML' });
+
+      // Group headings only make sense when both groups are present;
+      // otherwise they just repeat what the summary above already said.
+      const showHeadings = createdResult.data.length > 0 && assignedResult.data.length > 0;
 
       if (createdResult.data.length > 0) {
-        await ctx.reply('📤 <b>Created by me:</b>', { parse_mode: 'HTML' });
+        if (showHeadings) {
+          await ctx.reply('📤 <b>Created by me</b>', { parse_mode: 'HTML' });
+        }
         for (const order of createdResult.data) {
           await this.sendOrderMessage(ctx, order, user.role);
         }
       }
 
       if (assignedResult.data.length > 0) {
-        await ctx.reply('👷 <b>Assigned to me:</b>', { parse_mode: 'HTML' });
+        if (showHeadings) {
+          await ctx.reply('👷 <b>Assigned to me</b>', { parse_mode: 'HTML' });
+        }
         for (const order of assignedResult.data) {
           await this.sendOrderMessage(ctx, order, user.role);
         }
@@ -164,53 +169,9 @@ ${stats.byPriority.map((p) => `• ${this.botService.formatPriority(p.priority)}
   }
 
   private async sendOrderMessage(ctx: BotContext, order: any, userRole: string) {
-    const isOverdue = this.botService.isOverdue(order.deadline, order.status);
-    const overdueWarning = isOverdue ? '\n⚠️ <b>OVERDUE</b>' : '';
-
-    const message = `
-🔹 <b>${order.title}</b>
-
-📊 Status: ${this.botService.formatStatus(order.status)}
-🎯 Priority: ${this.botService.formatPriority(order.priority)}
-${order.assignedTo ? `👷 Assignee: ${order.assignedTo.name}` : '👷 Assignee: <i>unassigned</i>'}
-${order.deadline ? `⏰ Deadline: ${this.botService.formatDate(order.deadline)}${overdueWarning}` : ''}
-
-<code>ID: ${order.id}</code>
-    `.trim();
-
-    const keyboard = this.createOrderKeyboard(order, userRole);
-
-    await ctx.reply(message, {
+    await ctx.reply(this.botService.formatOrderCard(order), {
       parse_mode: 'HTML',
-      reply_markup: keyboard.reply_markup,
+      reply_markup: this.botService.buildOrderKeyboard(order, userRole).reply_markup,
     });
-  }
-
-  private createOrderKeyboard(order: any, userRole: string) {
-    const buttons: ReturnType<typeof Markup.button.callback>[] = [];
-
-    if (order.status === 'NEW' && order.assignedToId) {
-      buttons.push(Markup.button.callback('▶️ Start', `start_${order.id}`));
-    }
-
-    if (order.status === 'IN_PROGRESS') {
-      buttons.push(Markup.button.callback('✅ Complete', `complete_${order.id}`));
-    }
-
-    if (order.status !== 'DONE' && order.status !== 'CANCELLED') {
-      if (userRole === 'ADMIN' || userRole === 'MANAGER') {
-        buttons.push(Markup.button.callback('❌ Cancel', `cancel_${order.id}`));
-      }
-    }
-
-    buttons.push(Markup.button.callback('ℹ️ Details', `details_${order.id}`));
-
-    // Two buttons per row
-    const keyboard: ReturnType<typeof Markup.button.callback>[][] = [];
-    for (let i = 0; i < buttons.length; i += 2) {
-      keyboard.push(buttons.slice(i, i + 2));
-    }
-
-    return Markup.inlineKeyboard(keyboard);
   }
 }
