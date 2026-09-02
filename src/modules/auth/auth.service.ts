@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UserRole } from '@prisma/client';
+import { LoginAttemptsService } from './login-attempts.service';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +15,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private loginAttempts: LoginAttemptsService,
   ) {}
 
   /** Registers a new user and signs them in. */
@@ -56,25 +58,39 @@ export class AuthService {
     };
   }
 
-  /** Authenticates a user by email and password. */
-  async login(dto: LoginDto) {
+  /**
+   * Authenticates a user by email and password.
+   *
+   * `clientIp` scopes the failure counter, so guessing one account never
+   * locks out other people signing in from the same address.
+   */
+  async login(dto: LoginDto, clientIp = 'unknown') {
+    const attemptKey = this.loginAttempts.buildKey(clientIp, dto.email);
+    this.loginAttempts.assertNotLocked(attemptKey);
+
     const user = await this.prisma.users.findUnique({
       where: { email: dto.email },
     });
 
     if (!user) {
+      this.loginAttempts.recordFailure(attemptKey);
       throw new UnauthorizedException('Invalid email or password');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
 
     if (!isPasswordValid) {
+      this.loginAttempts.recordFailure(attemptKey);
       throw new UnauthorizedException('Invalid email or password');
     }
 
     if (!user.isActive) {
       throw new UnauthorizedException('Account is deactivated');
     }
+
+    // Correct credentials clear the budget, so a legitimate user who mistyped
+    // a few times is never locked out.
+    this.loginAttempts.reset(attemptKey);
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 

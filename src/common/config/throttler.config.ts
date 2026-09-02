@@ -28,12 +28,10 @@ export const throttlerConfig: ThrottlerModuleOptions = {
 
 /** Tighter limits for endpoints that are worth attacking. */
 export const RATE_LIMIT_CUSTOM = {
-  // Authentication: slows down credential stuffing and mass sign-ups
+  // Authentication: slows down credential stuffing and mass sign-ups.
+  // Sign-in is not here: LoginAttemptsService counts only failed attempts,
+  // which a request-counting throttler cannot express.
   auth: {
-    login: {
-      ttl: 900000, // 15 minutes
-      limit: 5,
-    },
     register: {
       ttl: 3600000, // 1 hour
       limit: 3,

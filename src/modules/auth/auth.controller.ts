@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get, Ip } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { RATE_LIMIT_CUSTOM, strictThrottle } from '../../common/config/throttler.config';
@@ -38,9 +38,8 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
-  // Stricter than the global limits: these endpoints are the ones worth
-  // brute-forcing.
-  @Throttle(strictThrottle(RATE_LIMIT_CUSTOM.auth.login))
+  // No route-level throttle here on purpose: LoginAttemptsService counts only
+  // failed attempts, so a user with the right password is never locked out.
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in' })
@@ -53,8 +52,8 @@ export class AuthController {
     status: 401,
     description: 'Invalid email or password',
   })
-  async login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Ip() ip: string): Promise<AuthResponseDto> {
+    return this.authService.login(dto, ip);
   }
 
   // Stricter than the global limits: these endpoints are the ones worth

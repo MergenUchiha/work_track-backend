@@ -94,6 +94,20 @@ export class EnvironmentVariables {
   @IsOptional()
   CORS_ORIGINS?: string;
 
+  // Failed sign-in attempts allowed per (address, account) before a lockout.
+  @Transform(toInt)
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  LOGIN_MAX_ATTEMPTS: number = 5;
+
+  // How long that lockout lasts, in milliseconds.
+  @Transform(toInt)
+  @IsInt()
+  @Min(1000)
+  @IsOptional()
+  LOGIN_LOCKOUT_MS: number = 900000;
+
   // Number of reverse proxies in front of the app, or an Express-accepted
   // value like "loopback". Unset means the app is exposed directly.
   @IsString()

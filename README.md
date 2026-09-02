@@ -260,6 +260,8 @@ Copy `.env.example` to `.env` and fill it in. Every variable is validated at sta
 | `BCRYPT_ROUNDS`                                | no       | Cost factor, 10–15, default 10                                   |
 | `CORS_ORIGINS`                                 | no       | Comma-separated list of allowed origins                          |
 | `TRUST_PROXY`                                  | no       | Reverse proxies in front of the app, e.g. `1` behind one nginx    |
+| `LOGIN_MAX_ATTEMPTS`                           | no       | Failed sign-ins before lockout, default 5                         |
+| `LOGIN_LOCKOUT_MS`                             | no       | Lockout duration in ms, default 900000 (15 min)                   |
 | `LOG_LEVEL`                                    | no       | `error` \| `warn` \| `info` \| `debug` \| `verbose`              |
 | `TELEGRAM_BOT_ENABLED`                         | no       | Enables the bot, default false                                   |
 | `TELEGRAM_BOT_TOKEN`                           | if bot   | Required when the bot is enabled                                 |
@@ -485,11 +487,31 @@ Only the assignee, an ADMIN or a MANAGER may move an order to `IN_PROGRESS` or `
 | Medium | 100 requests  | 1 minute |
 | Long   | 1000 requests | 1 hour   |
 
-Authentication endpoints are stricter: 5 login attempts per 15 minutes, 3 registrations per hour. Admins bypass throttling and health endpoints are exempt.
+Registration is limited to 3 accounts per hour and token refresh to 10 per minute. Admins bypass throttling and health endpoints are exempt.
 
-Sign-in attempts are counted per **(client address, account)** pair, not per address alone. Counting by address would let one attacker — or one colleague mistyping a password — lock out everyone sharing that address, which behind NAT or a reverse proxy can be every user at once. Spraying many accounts from one address is still limited by the global per-second and per-minute windows.
+### Sign-in lockout
 
-Set `TRUST_PROXY` when the app runs behind a reverse proxy. Without it every request carries the proxy's address, and the rate limiter sees the whole user base as a single client.
+Sign-in is handled separately, because a request-counting throttler cannot tell a legitimate user from an attacker. `LoginAttemptsService` counts only **failed** attempts, and a successful sign-in clears the counter:
+
+- 5 consecutive failures lock further attempts for 15 minutes (`LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCKOUT_MS`)
+- a correct password resets the budget, so someone who mistypes a few times is never locked out
+- the counter is keyed per **(client address, account)** pair
+
+That last point matters: keying on the address alone lets one attacker — or one colleague fat-fingering a password — lock out everyone sharing it, which behind NAT or a reverse proxy can be the entire user base. Spraying many accounts from one address is still covered by the global per-second and per-minute windows.
+
+The lockout response says how long the caller must wait:
+
+```json
+{
+  "statusCode": 429,
+  "error": "Too Many Requests",
+  "message": "Too many failed sign-in attempts. Try again in 897 seconds."
+}
+```
+
+The counter lives in memory, so a restart forgives everyone and a multi-instance deployment would need shared storage for the limit to hold across replicas.
+
+Set `TRUST_PROXY` when the app runs behind a reverse proxy. Without it every request carries the proxy's address, and both the throttler and the lockout see the whole user base as a single client.
 
 ---
 
@@ -512,6 +534,7 @@ npm run test:e2e     # end-to-end (configuration only, no specs yet)
 
 Unit tests cover:
 
+- `LoginAttemptsService` — failure counting, reset on success, per-account isolation
 - `UsersService` — CRUD, role rules, blocking
 - `OrdersService` — creation, status transitions, assignment, cancellation
 - `AuditsService` — writing entries, filtering, statistics, cleanup
