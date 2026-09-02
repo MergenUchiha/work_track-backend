@@ -56,3 +56,16 @@ export const RATE_LIMIT_CUSTOM = {
     limit: 60,
   },
 };
+
+/**
+ * Builds a @Throttle() override for the named throttlers above.
+ *
+ * The module declares `short`, `medium` and `long`; an override keyed
+ * `default` is silently ignored, so every name has to be replaced for a
+ * stricter limit to take effect.
+ */
+export const strictThrottle = (rule: { ttl: number; limit: number }) => ({
+  short: rule,
+  medium: rule,
+  long: rule,
+});

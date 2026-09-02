@@ -56,8 +56,9 @@ wait_for_db() {
 run_migrations() {
     log_info "Running database migrations..."
 
-    # No --schema flag: with prismaSchemaFolder Prisma finds prisma/schemas/ itself
-    if node_modules/.bin/prisma migrate deploy; then
+    # The schema is split across prisma/schemas/, so the path must be given
+    # explicitly — without it Prisma looks for prisma/schema.prisma and fails.
+    if node_modules/.bin/prisma migrate deploy --schema prisma/schemas; then
         log_info "Migrations applied successfully."
     else
         log_error "Migration failed. Exiting."

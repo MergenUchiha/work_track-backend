@@ -1,3 +1,5 @@
+// The seed runs outside Nest, so nothing else loads .env for it.
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { seedUsers } from './seeds/users.seed';
 import { seedOrders } from './seeds/orders.seed';

@@ -8,7 +8,7 @@ import {
   DiskHealthIndicator,
 } from '@nestjs/terminus';
 import { PrismaService } from '../../modules/prisma/prisma.service';
-import { SkipThrottle } from '../decorators/throttle-custom.decorator';
+import { SkipThrottle } from '@nestjs/throttler';
 
 /**
  * Health Check Controller

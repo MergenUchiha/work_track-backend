@@ -1,5 +1,7 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMIT_CUSTOM, strictThrottle } from '../../common/config/throttler.config';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -13,6 +15,9 @@ import { CurrentUser, JwtPayload } from './decorators/current-user.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Stricter than the global limits: these endpoints are the ones worth
+  // brute-forcing.
+  @Throttle(strictThrottle(RATE_LIMIT_CUSTOM.auth.register))
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user' })
@@ -33,6 +38,9 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
+  // Stricter than the global limits: these endpoints are the ones worth
+  // brute-forcing.
+  @Throttle(strictThrottle(RATE_LIMIT_CUSTOM.auth.login))
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in' })
@@ -49,6 +57,9 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  // Stricter than the global limits: these endpoints are the ones worth
+  // brute-forcing.
+  @Throttle(strictThrottle(RATE_LIMIT_CUSTOM.auth.refresh))
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate the access and refresh tokens' })

@@ -26,11 +26,22 @@ export enum LogLevel {
   Verbose = 'verbose',
 }
 
-/** Accepts the strings "true"/"false" that environment variables carry. */
+/**
+ * Environment variables always arrive as strings, so every conversion here is
+ * explicit. class-transformer's `enableImplicitConversion` is deliberately not
+ * used: it turns the string "false" into the boolean true.
+ */
 const toBoolean = ({ value }: { value: unknown }) => {
   if (typeof value === 'boolean') return value;
   if (typeof value !== 'string') return value;
   return value.trim().toLowerCase() === 'true';
+};
+
+const toInt = ({ value }: { value: unknown }) => {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string' || value.trim() === '') return value;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? value : parsed;
 };
 
 export class EnvironmentVariables {
@@ -38,6 +49,7 @@ export class EnvironmentVariables {
   @IsOptional()
   NODE_ENV: Environment = Environment.Development;
 
+  @Transform(toInt)
   @IsInt()
   @Min(1)
   @Max(65535)
@@ -71,6 +83,7 @@ export class EnvironmentVariables {
 
   // ----- Security -----
 
+  @Transform(toInt)
   @IsInt()
   @Min(10)
   @Max(15)
@@ -123,7 +136,6 @@ export class EnvironmentVariables {
  */
 export function validateEnv(config: Record<string, unknown>) {
   const validated = plainToInstance(EnvironmentVariables, config, {
-    enableImplicitConversion: true,
     exposeDefaultValues: true,
   });
 
