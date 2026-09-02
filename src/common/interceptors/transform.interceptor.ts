@@ -15,6 +15,13 @@ export interface Response<T> {
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> {
   intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
+    // The envelope describes an HTTP response. Bot handlers reply through
+    // Telegram themselves, so wrapping their return value is meaningless and
+    // reading response.statusCode would throw.
+    if (context.getType() !== 'http') {
+      return next.handle();
+    }
+
     const ctx = context.switchToHttp();
     const request = ctx.getRequest();
     const response = ctx.getResponse();

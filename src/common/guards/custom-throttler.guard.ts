@@ -9,8 +9,15 @@ import { ExecutionContext } from '@nestjs/common';
 @Injectable()
 export class CustomThrottlerGuard extends ThrottlerGuard {
   protected async shouldSkip(context: ExecutionContext): Promise<boolean> {
+    // Telegram updates also pass through the global guards, and they carry no
+    // HTTP request. Reading request.url there threw and killed every bot
+    // command before its handler ran.
+    if (context.getType() !== 'http') {
+      return true;
+    }
+
     const request = context.switchToHttp().getRequest();
-    const user = request.user;
+    const user = request?.user;
 
     // Admins are not rate limited
     if (user && user.role === 'ADMIN') {
@@ -18,7 +25,7 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
     }
 
     // Health probes must never be throttled
-    const url = request.url;
+    const url = request?.url ?? '';
     if (url.includes('/health') || url.includes('/metrics')) {
       return true;
     }

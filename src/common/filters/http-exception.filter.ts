@@ -29,6 +29,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost) {
+    // Bot updates reach this filter too. There is no HTTP response to write
+    // to, so log the failure and let the caller's own handler deal with it.
+    if (host.getType() !== 'http') {
+      this.logger.error(
+        `Unhandled exception outside HTTP (${host.getType()})`,
+        exception instanceof Error ? exception.stack : String(exception),
+      );
+      throw exception;
+    }
+
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();

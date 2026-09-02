@@ -60,7 +60,9 @@ export class BotModule {
 
     this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     this.logger.log('✅ TELEGRAM BOT IS ENABLED');
-    this.logger.log(`📱 Bot token: ${botToken.substring(0, 15)}...`);
+    // Only the bot id, never any part of the secret: logs get shipped,
+    // grepped and scanned for exactly this pattern.
+    this.logger.log(`📱 Bot id: ${botToken.split(':')[0]}`);
     this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     return {
