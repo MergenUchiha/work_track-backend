@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -24,13 +25,24 @@ function isSwaggerEnabled(nodeEnv: string): boolean {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new CustomLoggerService('Bootstrap'),
     bufferLogs: true,
   });
 
   const logger = new CustomLoggerService('Main');
   const nodeEnv = process.env.NODE_ENV || 'development';
+
+  // Behind a reverse proxy every request otherwise carries the proxy's
+  // address, so rate limiting would count the whole user base as one client.
+  // Set TRUST_PROXY to the number of proxies in front of the app (usually 1),
+  // or to a value Express accepts such as "loopback".
+  const trustProxy = process.env.TRUST_PROXY;
+  if (trustProxy) {
+    const hops = Number(trustProxy);
+    app.set('trust proxy', Number.isNaN(hops) ? trustProxy : hops);
+    logger.log(`✓ Trusting proxy: ${trustProxy}`);
+  }
 
   // ===== SECURITY =====
 

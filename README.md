@@ -141,7 +141,6 @@ worktrack-backend/
 │   │
 │   ├── common/
 │   │   ├── config/           # throttler, cors, helmet
-│   │   ├── decorators/       # ThrottleCustom, SkipThrottle
 │   │   ├── filters/          # AllExceptionsFilter (HTTP + Prisma errors)
 │   │   ├── guards/           # CustomThrottlerGuard
 │   │   ├── health/           # health endpoints (Terminus)
@@ -260,6 +259,7 @@ Copy `.env.example` to `.env` and fill it in. Every variable is validated at sta
 | `JWT_REFRESH_EXPIRES_IN`                       | no       | Refresh token lifetime, default `7d`                             |
 | `BCRYPT_ROUNDS`                                | no       | Cost factor, 10–15, default 10                                   |
 | `CORS_ORIGINS`                                 | no       | Comma-separated list of allowed origins                          |
+| `TRUST_PROXY`                                  | no       | Reverse proxies in front of the app, e.g. `1` behind one nginx    |
 | `LOG_LEVEL`                                    | no       | `error` \| `warn` \| `info` \| `debug` \| `verbose`              |
 | `TELEGRAM_BOT_ENABLED`                         | no       | Enables the bot, default false                                   |
 | `TELEGRAM_BOT_TOKEN`                           | if bot   | Required when the bot is enabled                                 |
@@ -485,7 +485,11 @@ Only the assignee, an ADMIN or a MANAGER may move an order to `IN_PROGRESS` or `
 | Medium | 100 requests  | 1 minute |
 | Long   | 1000 requests | 1 hour   |
 
-Authentication endpoints are stricter (5 login attempts per 15 minutes, 3 registrations per hour). Admins bypass throttling and health endpoints are exempt.
+Authentication endpoints are stricter: 5 login attempts per 15 minutes, 3 registrations per hour. Admins bypass throttling and health endpoints are exempt.
+
+Sign-in attempts are counted per **(client address, account)** pair, not per address alone. Counting by address would let one attacker — or one colleague mistyping a password — lock out everyone sharing that address, which behind NAT or a reverse proxy can be every user at once. Spraying many accounts from one address is still limited by the global per-second and per-minute windows.
+
+Set `TRUST_PROXY` when the app runs behind a reverse proxy. Without it every request carries the proxy's address, and the rate limiter sees the whole user base as a single client.
 
 ---
 

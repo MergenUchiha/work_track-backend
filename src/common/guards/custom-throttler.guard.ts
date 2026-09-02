@@ -3,8 +3,8 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { ExecutionContext } from '@nestjs/common';
 
 /**
- * Throttler guard that exempts admins and health checks, and tracks
- * authenticated callers by user id instead of IP.
+ * Throttler guard that exempts admins and health checks, and picks a tracking
+ * key that does not punish unrelated users.
  */
 @Injectable()
 export class CustomThrottlerGuard extends ThrottlerGuard {
@@ -27,12 +27,24 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
   }
 
   protected getTracker(req: Record<string, any>): Promise<string> {
-    // Track authenticated callers by user id
+    // Authenticated callers are tracked per account
     if (req.user?.sub) {
       return Promise.resolve(`user-${req.user.sub}`);
     }
 
-    // Fall back to the client IP
-    return Promise.resolve(req.ip || req.socket.remoteAddress);
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+
+    // Sign-in attempts are counted per (address, account) pair rather than per
+    // address alone. Keying on the address only means one attacker — or one
+    // colleague fat-fingering their password — locks out everyone sharing that
+    // address, which behind NAT or a reverse proxy can be the entire user base.
+    // Spraying many accounts from one address is still covered by the global
+    // per-second and per-minute limits.
+    const email = typeof req.body?.email === 'string' ? req.body.email.toLowerCase() : null;
+    if (email) {
+      return Promise.resolve(`${ip}:${email}`);
+    }
+
+    return Promise.resolve(ip);
   }
 }

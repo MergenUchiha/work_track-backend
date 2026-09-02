@@ -94,6 +94,12 @@ export class EnvironmentVariables {
   @IsOptional()
   CORS_ORIGINS?: string;
 
+  // Number of reverse proxies in front of the app, or an Express-accepted
+  // value like "loopback". Unset means the app is exposed directly.
+  @IsString()
+  @IsOptional()
+  TRUST_PROXY?: string;
+
   // ----- Observability -----
 
   @IsEnum(LogLevel)
