@@ -4,102 +4,94 @@
 
 # ──────────────────────────────────────────────────────────────
 # Stage 1: deps
-# Устанавливаем ВСЕ зависимости (включая devDeps для сборки)
+# Installs every dependency, dev ones included — the build needs them
 # ──────────────────────────────────────────────────────────────
 FROM node:20-alpine AS deps
 
-# Инструменты для нативных npm-пакетов (bcrypt)
+# Toolchain for native modules (bcrypt)
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Копируем только package-файлы — Docker layer cache
+# Copy manifests first so the install layer stays cached
 COPY package*.json ./
 
 RUN npm ci
 
 # ──────────────────────────────────────────────────────────────
 # Stage 2: builder
-# Генерируем Prisma Client и собираем TypeScript
+# Generates the Prisma client and compiles TypeScript
 # ──────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Копируем зависимости из предыдущего слоя
+# Reuse the installed dependencies
 COPY --from=deps /app/node_modules ./node_modules
 
-# Копируем весь исходный код
 COPY . .
 
-# Генерируем Prisma Client (используем папку со схемами)
+# The Prisma client must exist before tsc runs
 RUN npx prisma generate --schema prisma/schemas
 
-# Компилируем TypeScript → dist/
+# Compile TypeScript into dist/
 RUN npm run build
 
 # ──────────────────────────────────────────────────────────────
 # Stage 3: production
-# Минимальный образ только с production-артефактами
+# Minimal image: build artefacts and runtime dependencies only
 # ──────────────────────────────────────────────────────────────
 FROM node:20-alpine AS production
 
-# Устанавливаем только runtime-зависимости нативных пакетов
+# Runtime libraries for the native modules
 RUN apk add --no-cache \
     libstdc++ \
-    # postgresql-client нужен для pg_isready в entrypoint
+    # postgresql-client provides pg_isready, used by the entrypoint
     postgresql-client \
-    # dumb-init — правильный PID 1, корректный SIGTERM
+    # dumb-init as PID 1, so signals are handled correctly
     dumb-init
 
 WORKDIR /app
 
-# Создаём непривилегированного пользователя (best practice)
+# Run as an unprivileged user
 RUN addgroup -g 1001 -S nodejs && \
     adduser  -u 1001 -S nestjs -G nodejs
 
-# Копируем package.json для мета-информации
+# package.json is needed for metadata and npm ci below
 COPY --from=builder /app/package*.json ./
 
-# Устанавливаем ТОЛЬКО production-зависимости
-# prisma CLI нужен здесь, потому что он в devDependencies —
-# он копируется ниже из builder/node_modules напрямую
+# Production dependencies only. The Prisma CLI lives in devDependencies,
+# so it is copied straight from the builder stage below.
 RUN npm ci --omit=dev --ignore-scripts
 
-# Копируем Prisma Client (сгенерирован в builder)
+# Prisma client, generated in the builder stage
 COPY --from=builder /app/node_modules/.prisma         ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client  ./node_modules/@prisma/client
 
-# Копируем Prisma CLI (нужен для migrate deploy в entrypoint)
+# Prisma CLI, required by `migrate deploy` in the entrypoint
 COPY --from=builder /app/node_modules/.bin/prisma     ./node_modules/.bin/prisma
 COPY --from=builder /app/node_modules/prisma          ./node_modules/prisma
 
-# Копируем скомпилированное приложение
+# Compiled application
 COPY --from=builder /app/dist ./dist
 
-# Копируем схемы Prisma (нужны для migrate deploy)
+# Schemas and migrations, required by `migrate deploy`
 COPY --from=builder /app/prisma ./prisma
 
-# Копируем entrypoint-скрипт
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
-# Создаём директорию для логов с нужными правами
+# Writable log directory
 RUN mkdir -p logs && chown -R nestjs:nodejs /app
 
-# Переключаемся на непривилегированного пользователя
 USER nestjs
 
-# Порт приложения
 EXPOSE 3000
 
 # ──────────────────────────────────────────────────────────────
 # Healthcheck
-# Проверяем liveness endpoint — он не требует DB и отвечает быстро
-# --interval: каждые 30s
-# --timeout:  ответ должен прийти за 5s
-# --retries:  3 неудачи подряд = unhealthy
-# --start-period: 15s grace period на старт приложения
+# Probes the liveness endpoint: it does not touch the database and answers fast.
+# Three consecutive failures mark the container unhealthy.
 # ──────────────────────────────────────────────────────────────
 HEALTHCHECK \
     --interval=30s \
@@ -108,6 +100,6 @@ HEALTHCHECK \
     --start-period=15s \
     CMD wget -qO- http://localhost:3000/health/live || exit 1
 
-# dumb-init как PID 1 → корректная обработка сигналов
+# dumb-init as PID 1 for correct signal handling
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["./docker-entrypoint.sh"]

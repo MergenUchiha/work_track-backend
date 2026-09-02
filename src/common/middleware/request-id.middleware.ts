@@ -3,19 +3,18 @@ import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Middleware для добавления уникального ID к каждому запросу
- * Помогает в трейсинге и отладке
+ * Attaches a unique id to every request, so a single call can be traced
+ * across log lines.
  */
 @Injectable()
 export class RequestIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
-    // Используем существующий request ID или создаем новый
+    // Reuse an incoming id when the caller supplied one
     const requestId = (req.headers['x-request-id'] as string) || uuidv4();
 
-    // Добавляем request ID к объекту запроса
     (req as any).id = requestId;
 
-    // Добавляем request ID в response headers
+    // Echo the id back to the caller
     res.setHeader('X-Request-ID', requestId);
 
     next();

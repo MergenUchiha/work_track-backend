@@ -4,7 +4,7 @@ import { tap } from 'rxjs/operators';
 import { Request, Response } from 'express';
 
 /**
- * Глобальный interceptor для логирования HTTP запросов и ответов
+ * Logs every HTTP request and its response.
  */
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -20,7 +20,7 @@ export class LoggingInterceptor implements NestInterceptor {
 
     const now = Date.now();
 
-    // Логируем входящий запрос
+    // Incoming request
     const requestLog = {
       timestamp: new Date().toISOString(),
       method,
@@ -84,7 +84,7 @@ export class LoggingInterceptor implements NestInterceptor {
   }
 
   /**
-   * Очищаем чувствительные данные из body
+   * Strips credentials before anything is written to the log.
    */
   private sanitizeBody(body: any): any {
     if (!body || typeof body !== 'object') {

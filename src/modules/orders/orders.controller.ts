@@ -35,41 +35,38 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   /**
-   * Создать новый заказ (Admin, Manager)
+   * Creates an order. Admins and managers only. (Admin, Manager)
    */
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Создать новый заказ',
-    description: 'Доступно только администраторам и менеджерам',
+    summary: 'Create an order',
+    description: 'Admins and managers only',
   })
   @ApiResponse({
     status: 201,
-    description: 'Заказ успешно создан',
+    description: 'Order created',
     type: OrderDto,
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async create(@Body() dto: CreateOrderDto, @CurrentUser() user: JwtPayload) {
     return this.ordersService.create(dto, user.sub, user.role);
   }
 
-  /**
-   * Получить список заказов с фильтрацией
-   */
   @Get()
   @ApiOperation({
-    summary: 'Получить список заказов',
+    summary: 'List orders',
     description:
-      'Админы и менеджеры видят все заказы. Работники видят только свои заказы (созданные или назначенные им).',
+      'Admins and managers see every order. Workers see only orders they created or are assigned to.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Список заказов',
+    description: 'Orders',
     type: PaginatedOrdersDto,
   })
   async findAll(@Query() query: GetOrdersQueryDto, @CurrentUser() user: JwtPayload) {
@@ -77,16 +74,16 @@ export class OrdersController {
   }
 
   /**
-   * Получить статистику по заказам
+   * Aggregate order statistics.
    */
   @Get('stats/overview')
   @ApiOperation({
-    summary: 'Получить статистику по заказам',
-    description: 'Работники видят только свою статистику',
+    summary: 'Get order statistics',
+    description: 'Workers see only their own statistics',
   })
   @ApiResponse({
     status: 200,
-    description: 'Статистика заказов',
+    description: 'Order statistics',
     schema: {
       type: 'object',
       properties: {
@@ -120,59 +117,59 @@ export class OrdersController {
   }
 
   /**
-   * Получить заказ по ID
+   * Returns an order by id, subject to role rules.
    */
   @Get(':id')
   @ApiOperation({
-    summary: 'Получить заказ по ID',
-    description: 'Работники могут видеть только свои заказы. Админы и менеджеры видят все.',
+    summary: 'Get an order by ID',
+    description: 'Workers can only read their own orders; admins and managers can read any.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Данные заказа',
+    description: 'Order',
     type: OrderDto,
   })
   @ApiResponse({
     status: 404,
-    description: 'Заказ не найден',
+    description: 'Order not found',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.ordersService.findOne(id, user.sub, user.role);
   }
 
   /**
-   * Обновить заказ
+   * Updates an order.
    */
   @Put(':id')
   @ApiOperation({
-    summary: 'Обновить заказ',
+    summary: 'Update an order',
     description:
-      'Создатель заказа или админ/менеджер могут обновлять заказ. Нельзя обновлять завершённые или отменённые заказы.',
+      'The creator, an admin or a manager may update an order. Completed and cancelled orders cannot be updated.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Заказ успешно обновлён',
+    description: 'Order updated',
     type: OrderDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Нельзя обновлять завершённые или отменённые заказы',
+    description: 'Completed or cancelled orders cannot be updated',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async update(
     @Param('id') id: string,
@@ -183,32 +180,31 @@ export class OrdersController {
   }
 
   /**
-   * Назначить/снять исполнителя
+   * Assigns or unassigns a worker. Admins and managers only.
    */
   @Patch(':id/assign')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
-    summary: 'Назначить или снять исполнителя',
-    description:
-      'Доступно только администраторам и менеджерам. Установите assignedToId в null для снятия назначения.',
+    summary: 'Assign or unassign a worker',
+    description: 'Admins and managers only. Set assignedToId to null to unassign.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Исполнитель успешно назначен/снят',
+    description: 'Assignee updated',
     type: OrderDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Нельзя назначать на завершённые или отменённые заказы',
+    description: 'Completed or cancelled orders cannot be reassigned',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async assign(
     @Param('id') id: string,
@@ -219,30 +215,30 @@ export class OrdersController {
   }
 
   /**
-   * Изменить статус заказа (FSM)
+   * Moves an order to a new status, guarded by the state machine.
    */
   @Patch(':id/status')
   @ApiOperation({
-    summary: 'Изменить статус заказа',
+    summary: 'Change the order status',
     description:
-      'Переходы контролируются FSM. NEW → IN_PROGRESS/CANCELLED, IN_PROGRESS → DONE/CANCELLED. Только исполнитель может перевести в IN_PROGRESS или DONE.',
+      'Transitions are guarded by a state machine: NEW → IN_PROGRESS/CANCELLED, IN_PROGRESS → DONE/CANCELLED. Only the assignee may move an order to IN_PROGRESS or DONE.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Статус успешно изменён',
+    description: 'Status changed',
     type: OrderDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Невозможный переход статуса',
+    description: 'Illegal status transition',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async changeStatus(
     @Param('id') id: string,
@@ -253,30 +249,30 @@ export class OrdersController {
   }
 
   /**
-   * Отменить заказ с указанием причины
+   * Cancels an order and records the reason.
    */
   @Post(':id/cancel')
   @ApiOperation({
-    summary: 'Отменить заказ с указанием причины',
+    summary: 'Cancel an order with a reason',
     description:
-      'Создатель заказа или админ/менеджер могут отменять заказ. Причина сохраняется в audit log.',
+      'The creator, an admin or a manager may cancel an order. The reason is written to the audit log.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Заказ успешно отменён',
+    description: 'Order cancelled',
     type: OrderDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Невозможно отменить заказ в текущем статусе',
+    description: 'The order cannot be cancelled in its current status',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async cancel(
     @Param('id') id: string,
@@ -287,33 +283,33 @@ export class OrdersController {
   }
 
   /**
-   * Удалить заказ (только админ)
+   * Deletes an order. Admin only.
    */
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Удалить заказ',
-    description: 'Доступно только администраторам',
+    summary: 'Delete an order',
+    description: 'Admins only',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Заказ успешно удалён',
+    description: 'Order deleted',
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Заказ успешно удалён' },
+        message: { type: 'string', example: 'Order deleted successfully' },
       },
     },
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.ordersService.remove(id, user.sub, user.role);

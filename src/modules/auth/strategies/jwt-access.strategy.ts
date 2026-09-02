@@ -11,8 +11,8 @@ export interface JwtAccessPayload {
 }
 
 /**
- * Стратегия для валидации JWT Access Token
- * Автоматически проверяет подпись и срок действия токена
+ * Validates the JWT access token: signature and expiry are checked by
+ * passport-jwt, this strategy adds the user-state checks on top.
  */
 @Injectable()
 export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt-access') {
@@ -27,12 +27,8 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt-access') 
     });
   }
 
-  /**
-   * Метод validate вызывается автоматически после успешной проверки токена
-   * Здесь можно добавить дополнительные проверки (например, активен ли пользователь)
-   */
+  /** Runs after the signature check; confirms the user still exists and is active. */
   async validate(payload: JwtAccessPayload) {
-    // Проверяем, существует ли пользователь и активен ли он
     const user = await this.prisma.users.findUnique({
       where: { id: payload.sub },
       select: {
@@ -45,14 +41,14 @@ export class JwtAccessStrategy extends PassportStrategy(Strategy, 'jwt-access') 
     });
 
     if (!user) {
-      throw new UnauthorizedException('Пользователь не найден');
+      throw new UnauthorizedException('User not found');
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Аккаунт деактивирован');
+      throw new UnauthorizedException('Account is deactivated');
     }
 
-    // Возвращаемый объект будет доступен в req.user
+    // The returned object becomes req.user
     return {
       sub: payload.sub,
       email: payload.email,

@@ -10,6 +10,19 @@ import { CustomLoggerService } from './common/logger/custom-logger.service';
 import { getCorsConfig } from './common/config/cors.config';
 import { helmetConfig } from './common/config/helmet.config';
 
+/**
+ * Swagger is served unless it is explicitly switched off. When
+ * SWAGGER_ENABLED is unset it follows the environment: on in development,
+ * off in production, so the API surface is not published by accident.
+ */
+function isSwaggerEnabled(nodeEnv: string): boolean {
+  const flag = process.env.SWAGGER_ENABLED;
+  if (flag !== undefined) {
+    return flag.trim().toLowerCase() === 'true';
+  }
+  return nodeEnv !== 'production';
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new CustomLoggerService('Bootstrap'),
@@ -17,11 +30,10 @@ async function bootstrap() {
   });
 
   const logger = new CustomLoggerService('Main');
+  const nodeEnv = process.env.NODE_ENV || 'development';
 
   // ===== SECURITY =====
 
-  // FIX: Используем import helmet from 'helmet' (требует esModuleInterop: true в tsconfig)
-  // Было: import * as helmet from 'helmet' + helmet.default(helmetConfig)
   app.use(helmet(helmetConfig));
   logger.log('✓ Helmet security headers configured');
 
@@ -38,7 +50,7 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
-      disableErrorMessages: process.env.NODE_ENV === 'production',
+      disableErrorMessages: nodeEnv === 'production',
       validationError: {
         target: false,
         value: false,
@@ -64,70 +76,74 @@ async function bootstrap() {
 
   // ===== SWAGGER DOCUMENTATION =====
 
-  const config = new DocumentBuilder()
-    .setTitle('WorkTrack API')
-    .setDescription(
-      `
-      # WorkTrack API Documentation
-      
-      Система управления заказами и задачами с поддержкой ролей и аудита.
-      
-      ## Аутентификация
-      Используется JWT-based аутентификация с refresh токенами.
-      Access Token действует **15 минут**, Refresh Token — **7 дней**.
-      
-      ## Rate Limiting
-      API защищено от чрезмерного использования:
-      - 10 запросов в секунду
-      - 100 запросов в минуту
-      - 1000 запросов в час
-      
-      Для аутентификации установлены более строгие лимиты.
-      
-      ## Роли
-      - **ADMIN**: Полный доступ ко всем функциям
-      - **MANAGER**: Управление заказами и пользователями
-      - **WORKER**: Работа со своими заказами
-    `,
-    )
-    .setVersion('1.0.0')
-    .setContact('API Support', 'https://example.com/support', 'support@example.com')
-    .setLicense('MIT', 'https://opensource.org/licenses/MIT')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'JWT',
-        description: 'Enter JWT access token',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
-    .addTag('Authentication', 'Эндпоинты для аутентификации и авторизации')
-    .addTag('Users', 'Управление пользователями')
-    .addTag('Orders', 'Управление заказами')
-    .addTag('Audit', 'Аудит и логирование действий')
-    .addTag('Health', 'Проверка здоровья приложения')
-    .addServer('http://localhost:3000', 'Development server')
-    .addServer('https://api.example.com', 'Production server')
-    .build();
+  const swaggerEnabled = isSwaggerEnabled(nodeEnv);
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      docExpansion: 'none',
-      filter: true,
-      showRequestDuration: true,
-      tryItOutEnabled: true,
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
-    },
-    customSiteTitle: 'WorkTrack API Docs',
-    customCss: '.swagger-ui .topbar { display: none }',
-  });
-  logger.log('✓ Swagger documentation configured at /api/docs');
+  if (swaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('WorkTrack API')
+      .setDescription(
+        `
+      # WorkTrack API Documentation
+
+      Order and task management with role-based access and an audit trail.
+
+      ## Authentication
+      JWT-based authentication with refresh tokens.
+      Access tokens live **15 minutes**, refresh tokens **7 days**.
+
+      ## Rate limiting
+      The API is protected against excessive use:
+      - 10 requests per second
+      - 100 requests per minute
+      - 1000 requests per hour
+
+      Authentication endpoints have stricter limits.
+
+      ## Roles
+      - **ADMIN**: full access to every feature
+      - **MANAGER**: manages orders and users
+      - **WORKER**: works on their own orders
+    `,
+      )
+      .setVersion('1.0.0')
+      .setLicense('MIT', 'https://opensource.org/licenses/MIT')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'JWT',
+          description: 'Enter JWT access token',
+          in: 'header',
+        },
+        'JWT-auth',
+      )
+      .addTag('Authentication', 'Authentication and authorization endpoints')
+      .addTag('Users', 'User management')
+      .addTag('Orders', 'Order management')
+      .addTag('Audit', 'Audit trail and action logging')
+      .addTag('Health', 'Application health checks')
+      .addServer('http://localhost:3000', 'Development server')
+      .build();
+
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        docExpansion: 'none',
+        filter: true,
+        showRequestDuration: true,
+        tryItOutEnabled: true,
+        tagsSorter: 'alpha',
+        operationsSorter: 'alpha',
+      },
+      customSiteTitle: 'WorkTrack API Docs',
+      customCss: '.swagger-ui .topbar { display: none }',
+    });
+    logger.log('✓ Swagger documentation configured at /api/docs');
+  } else {
+    logger.log('✓ Swagger documentation disabled');
+  }
 
   // ===== GRACEFUL SHUTDOWN =====
 
@@ -142,9 +158,11 @@ async function bootstrap() {
   logger.log('');
   logger.log('='.repeat(60));
   logger.log(`🚀 Application is running on: http://localhost:${port}`);
-  logger.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
+  if (swaggerEnabled) {
+    logger.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
+  }
   logger.log(`💚 Health check: http://localhost:${port}/health`);
-  logger.log(`🔒 Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.log(`🔒 Environment: ${nodeEnv}`);
   logger.log('='.repeat(60));
   logger.log('');
 

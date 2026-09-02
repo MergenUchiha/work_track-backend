@@ -2,13 +2,13 @@ import { IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * DTO для изменения статуса активности пользователя (только админ)
+ * Blocks or unblocks a user. Admin only.
  */
 export class ToggleActiveDto {
   @ApiProperty({
     example: false,
-    description: 'Статус активности (true - активен, false - заблокирован)',
+    description: 'Active status (true = active, false = blocked)',
   })
-  @IsBoolean({ message: 'isActive должно быть boolean значением' })
+  @IsBoolean({ message: 'isActive must be a boolean' })
   isActive: boolean;
 }

@@ -6,7 +6,7 @@ import { OrderStatus, OrderPriority } from '@prisma/client';
 export class GetOrdersQueryDto {
   @ApiPropertyOptional({
     example: 1,
-    description: 'Номер страницы',
+    description: 'Page number',
     minimum: 1,
     default: 1,
   })
@@ -18,7 +18,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: 10,
-    description: 'Количество элементов на странице',
+    description: 'Items per page',
     minimum: 1,
     default: 10,
   })
@@ -31,7 +31,7 @@ export class GetOrdersQueryDto {
   @ApiPropertyOptional({
     enum: OrderStatus,
     example: OrderStatus.IN_PROGRESS,
-    description: 'Фильтр по статусу',
+    description: 'Filter by status',
   })
   @IsOptional()
   @IsEnum(OrderStatus)
@@ -40,7 +40,7 @@ export class GetOrdersQueryDto {
   @ApiPropertyOptional({
     enum: OrderPriority,
     example: OrderPriority.HIGH,
-    description: 'Фильтр по приоритету',
+    description: 'Filter by priority',
   })
   @IsOptional()
   @IsEnum(OrderPriority)
@@ -48,7 +48,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: '550e8400-e29b-41d4-a716-446655440001',
-    description: 'Фильтр по создателю заказа',
+    description: 'Filter by creator',
   })
   @IsOptional()
   @IsUUID('4')
@@ -56,7 +56,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: '550e8400-e29b-41d4-a716-446655440003',
-    description: 'Фильтр по исполнителю заказа',
+    description: 'Filter by assignee',
   })
   @IsOptional()
   @IsUUID('4')
@@ -64,7 +64,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: 'auth',
-    description: 'Поиск по названию или описанию',
+    description: 'Search in title and description',
   })
   @IsOptional()
   @IsString()
@@ -72,7 +72,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: '2024-01-01',
-    description: 'Фильтр: дедлайн после этой даты',
+    description: 'Deadline on or after this date',
   })
   @IsOptional()
   @IsDateString()
@@ -80,7 +80,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: '2024-12-31',
-    description: 'Фильтр: дедлайн до этой даты',
+    description: 'Deadline on or before this date',
   })
   @IsOptional()
   @IsDateString()
@@ -88,7 +88,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: 'createdAt',
-    description: 'Поле для сортировки',
+    description: 'Field to sort by',
     enum: ['createdAt', 'updatedAt', 'deadline', 'title', 'priority', 'status'],
     default: 'createdAt',
   })
@@ -98,7 +98,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: 'desc',
-    description: 'Направление сортировки',
+    description: 'Sort direction',
     enum: ['asc', 'desc'],
     default: 'desc',
   })
@@ -108,7 +108,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: 'true',
-    description: 'Только заказы с истекшим дедлайном',
+    description: 'Only overdue orders',
   })
   @IsOptional()
   @Transform(({ value }) => {
@@ -120,7 +120,7 @@ export class GetOrdersQueryDto {
 
   @ApiPropertyOptional({
     example: 'true',
-    description: 'Только заказы без назначенного исполнителя',
+    description: 'Only unassigned orders',
   })
   @IsOptional()
   @Transform(({ value }) => {
@@ -134,7 +134,7 @@ export class GetOrdersQueryDto {
 export class PaginatedOrdersDto {
   @ApiPropertyOptional({
     type: [Object],
-    description: 'Список заказов',
+    description: 'Orders',
   })
   data: any[];
 
@@ -145,7 +145,7 @@ export class PaginatedOrdersDto {
       limit: 10,
       totalPages: 10,
     },
-    description: 'Метаданные пагинации',
+    description: 'Pagination metadata',
   })
   meta: {
     total: number;

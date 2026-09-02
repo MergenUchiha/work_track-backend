@@ -3,47 +3,47 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class AuditLogDto {
   @ApiProperty({
     example: '770e8400-e29b-41d4-a716-446655440001',
-    description: 'UUID лога',
+    description: 'Entry UUID',
   })
   id: string;
 
   @ApiProperty({
     example: 'STATUS_CHANGED',
-    description: 'Тип действия',
+    description: 'Action type',
   })
   action: string;
 
   @ApiPropertyOptional({
     example: { status: 'NEW' },
-    description: 'Старые значения (до изменения)',
+    description: 'Values before the change',
     nullable: true,
   })
   oldValue: any;
 
   @ApiPropertyOptional({
     example: { status: 'IN_PROGRESS' },
-    description: 'Новые значения (после изменения)',
+    description: 'Values after the change',
     nullable: true,
   })
   newValue: any;
 
   @ApiProperty({
     example: '2024-01-15T10:30:00.000Z',
-    description: 'Дата и время действия',
+    description: 'When the action happened',
   })
   createdAt: Date;
 
   @ApiProperty({
     example: '660e8400-e29b-41d4-a716-446655440001',
-    description: 'ID заказа',
+    description: 'Order id',
   })
   orderId: string;
 
   @ApiProperty({
-    description: 'Информация о заказе',
+    description: 'Order summary',
     example: {
       id: '660e8400-e29b-41d4-a716-446655440001',
-      title: 'Разработка модуля',
+      title: 'Build the module',
       status: 'IN_PROGRESS',
     },
   })
@@ -55,12 +55,12 @@ export class AuditLogDto {
 
   @ApiProperty({
     example: '550e8400-e29b-41d4-a716-446655440003',
-    description: 'ID пользователя, выполнившего действие',
+    description: 'Id of the user who performed the action',
   })
   changedById: string;
 
   @ApiProperty({
-    description: 'Информация о пользователе',
+    description: 'User summary',
     example: {
       id: '550e8400-e29b-41d4-a716-446655440003',
       email: 'worker@example.com',

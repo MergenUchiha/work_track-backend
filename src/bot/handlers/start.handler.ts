@@ -15,28 +15,28 @@ export class StartHandler {
       const user = await this.botService.getOrCreateUser(ctx);
 
       const welcomeMessage = `
-👋 <b>Добро пожаловать в WorkTrack Bot!</b>
+👋 <b>Welcome to WorkTrack Bot!</b>
 
-Привет, <b>${user.name}</b>!
-Ваша роль: ${this.botService.formatRole(user.role)}
+Hi, <b>${user.name}</b>!
+Your role: ${this.botService.formatRole(user.role)}
 
-<b>Доступные команды:</b>
+<b>Commands:</b>
 
-📋 /tasks - Все заказы
-➕ /create - Создать заказ
-📝 /my - Мои заказы
-👤 /profile - Мой профиль
-📊 /stats - Статистика
+📋 /tasks - All orders
+➕ /create - Create an order
+📝 /my - My orders
+👤 /profile - My profile
+📊 /stats - Statistics
 
-<b>Что умеет бот:</b>
-• Показывать список заказов
-• Создавать новые заказы
-• Брать заказы в работу
-• Завершать заказы
-• Отменять заказы
-• Получать уведомления
+<b>What this bot can do:</b>
+• List orders
+• Create new orders
+• Pick up orders
+• Complete orders
+• Cancel orders
+• Send notifications
 
-Используйте команды выше для начала работы!
+Use one of the commands above to get started.
       `.trim();
 
       await ctx.reply(welcomeMessage, { parse_mode: 'HTML' });
@@ -44,7 +44,7 @@ export class StartHandler {
       this.logger.log(`User ${user.id} (@${ctx.from?.username}) started the bot`);
     } catch (error) {
       this.logger.error(`Error in /start handler: ${error.message}`, error.stack);
-      await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+      await ctx.reply('❌ Something went wrong. Please try again later.');
     }
   }
 }

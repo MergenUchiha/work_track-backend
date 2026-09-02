@@ -51,7 +51,7 @@ describe('AuditsService', () => {
   });
 
   describe('createLog', () => {
-    it('должен создать запись в аудит логе', async () => {
+    it('writes an audit entry', async () => {
       const dto = {
         orderId: 'order-id-1',
         action: 'STATUS_CHANGED',
@@ -76,7 +76,7 @@ describe('AuditsService', () => {
       });
     });
 
-    it('должен создать лог без old/new values', async () => {
+    it('writes an entry without old/new values', async () => {
       const dto = {
         orderId: 'order-id-1',
         action: 'ORDER_CREATED',
@@ -104,7 +104,7 @@ describe('AuditsService', () => {
   });
 
   describe('getLogs', () => {
-    it('должен вернуть пагинированный список логов', async () => {
+    it('returns a paginated list of entries', async () => {
       const query = { page: 1, limit: 10 };
       const logs = [mockLog];
 
@@ -122,7 +122,7 @@ describe('AuditsService', () => {
       });
     });
 
-    it('должен фильтровать логи по orderId', async () => {
+    it('filters entries by orderId', async () => {
       const query = { orderId: 'order-id-1', page: 1, limit: 10 };
 
       mockPrismaService.orderAuditLogs.count.mockResolvedValue(5);
@@ -141,7 +141,7 @@ describe('AuditsService', () => {
   });
 
   describe('getOrderLogs', () => {
-    it('должен вернуть логи для конкретного заказа', async () => {
+    it('returns the audit trail of an order', async () => {
       mockPrismaService.orderAuditLogs.findMany.mockResolvedValue([mockLog]);
 
       const result = await service.getOrderLogs('order-id-1');
@@ -156,7 +156,7 @@ describe('AuditsService', () => {
   });
 
   describe('getUserLogs', () => {
-    it('должен вернуть логи для конкретного пользователя', async () => {
+    it('returns the action history of a user', async () => {
       mockPrismaService.orderAuditLogs.findMany.mockResolvedValue([mockLog]);
 
       const result = await service.getUserLogs('user-id-1', 50);
@@ -172,7 +172,7 @@ describe('AuditsService', () => {
   });
 
   describe('getActionStats', () => {
-    it('должен вернуть статистику по действиям', async () => {
+    it('returns action statistics', async () => {
       mockPrismaService.orderAuditLogs.count.mockResolvedValue(100);
       mockPrismaService.orderAuditLogs.groupBy.mockResolvedValueOnce([
         { action: 'STATUS_CHANGED', _count: 50 },
@@ -199,7 +199,7 @@ describe('AuditsService', () => {
   });
 
   describe('cleanupOldLogs', () => {
-    it('должен удалить старые логи', async () => {
+    it('removes old entries', async () => {
       mockPrismaService.orderAuditLogs.deleteMany.mockResolvedValue({
         count: 150,
       });
@@ -213,7 +213,7 @@ describe('AuditsService', () => {
   });
 
   describe('getFieldHistory', () => {
-    it('должен вернуть историю изменений поля', async () => {
+    it('returns the change history of a field', async () => {
       const logs = [
         {
           ...mockLog,

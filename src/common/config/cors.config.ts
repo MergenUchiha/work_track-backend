@@ -1,8 +1,7 @@
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 
 /**
- * Конфигурация CORS
- * Управляет доступом к API с различных доменов
+ * CORS configuration: controls which origins may call the API.
  */
 export const getCorsConfig = (): CorsOptions => {
   const allowedOrigins = process.env.CORS_ORIGINS
@@ -11,13 +10,13 @@ export const getCorsConfig = (): CorsOptions => {
 
   return {
     origin: (origin, callback) => {
-      // Разрешаем запросы без origin (например, из Postman, мобильных приложений)
+      // Requests without an Origin header (curl, Postman, mobile apps)
       if (!origin) {
         callback(null, true);
         return;
       }
 
-      // Проверяем, есть ли origin в списке разрешенных
+      // Allow only configured origins
       if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
         callback(null, true);
       } else {
@@ -25,10 +24,10 @@ export const getCorsConfig = (): CorsOptions => {
       }
     },
 
-    // Разрешенные HTTP методы
+    // Allowed HTTP methods
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
-    // Разрешенные headers
+    // Allowed request headers
     allowedHeaders: [
       'Origin',
       'X-Requested-With',
@@ -38,19 +37,19 @@ export const getCorsConfig = (): CorsOptions => {
       'X-Request-ID',
     ],
 
-    // Headers которые будут доступны в ответе
+    // Response headers exposed to the browser
     exposedHeaders: ['X-Request-ID', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
 
-    // Разрешить отправку credentials (cookies, authorization headers)
+    // Allow credentials (cookies, Authorization header)
     credentials: true,
 
-    // Время кеширования preflight запросов (24 часа)
+    // How long a preflight response may be cached (24 hours)
     maxAge: 86400,
 
-    // Разрешить preflight requests
+    // Handle preflight requests
     preflightContinue: false,
 
-    // Ответ 204 на OPTIONS requests
+    // Answer OPTIONS with 204
     optionsSuccessStatus: 204,
   };
 };

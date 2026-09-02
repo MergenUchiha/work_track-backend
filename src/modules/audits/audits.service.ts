@@ -16,7 +16,7 @@ export class AuditsService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Создать запись в аудит логе
+   * Writes one audit entry.
    */
   async createLog(data: CreateAuditLogDto) {
     return this.prisma.orderAuditLogs.create({
@@ -31,7 +31,7 @@ export class AuditsService {
   }
 
   /**
-   * Получить аудит логи с фильтрацией и пагинацией
+   * Lists audit entries with filtering and pagination.
    */
   async getLogs(query: GetAuditLogsQueryDto) {
     const {
@@ -46,7 +46,7 @@ export class AuditsService {
       sortOrder = 'desc',
     } = query;
 
-    // Формируем условия фильтрации
+    // Build the filter
     const where: Prisma.OrderAuditLogsWhereInput = {};
 
     if (orderId) {
@@ -71,10 +71,10 @@ export class AuditsService {
       }
     }
 
-    // Подсчитываем общее количество
+    // Total count for pagination metadata
     const total = await this.prisma.orderAuditLogs.count({ where });
 
-    // Получаем логи с пагинацией
+    // Page of entries
     const logs = await this.prisma.orderAuditLogs.findMany({
       where,
       include: {
@@ -111,7 +111,7 @@ export class AuditsService {
   }
 
   /**
-   * Получить логи для конкретного заказа
+   * Returns the full audit trail of one order.
    */
   async getOrderLogs(orderId: string) {
     return this.prisma.orderAuditLogs.findMany({
@@ -131,7 +131,7 @@ export class AuditsService {
   }
 
   /**
-   * Получить логи для конкретного пользователя
+   * Returns the recent actions of one user.
    */
   async getUserLogs(userId: string, limit: number = 50) {
     return this.prisma.orderAuditLogs.findMany({
@@ -151,7 +151,7 @@ export class AuditsService {
   }
 
   /**
-   * Получить статистику по действиям
+   * Aggregates actions by type over a date range.
    */
   async getActionStats(dateFrom?: string, dateTo?: string) {
     const where: Prisma.OrderAuditLogsWhereInput = {};
@@ -191,7 +191,7 @@ export class AuditsService {
       }),
     ]);
 
-    // Получаем информацию о топ пользователях
+    // Resolve the most active users
     const userIds = byUser.map((item) => item.changedById);
     const topUsers = await this.prisma.users.findMany({
       where: { id: { in: userIds } },
@@ -220,7 +220,7 @@ export class AuditsService {
   }
 
   /**
-   * Получить последние N действий
+   * Returns the most recent actions across the system.
    */
   async getRecentLogs(limit: number = 20) {
     return this.prisma.orderAuditLogs.findMany({
@@ -247,7 +247,7 @@ export class AuditsService {
   }
 
   /**
-   * Получить историю изменений конкретного поля
+   * Returns how one field of an order changed over time.
    */
   async getFieldHistory(orderId: string, field: string) {
     const logs = await this.prisma.orderAuditLogs.findMany({
@@ -292,7 +292,7 @@ export class AuditsService {
   }
 
   /**
-   * Очистка старых логов (для maintenance)
+   * Maintenance: drops entries older than the retention window.
    */
   async cleanupOldLogs(daysToKeep: number = 90) {
     const cutoffDate = new Date();
@@ -307,7 +307,7 @@ export class AuditsService {
     });
 
     return {
-      message: `Удалено ${result.count} старых логов`,
+      message: `Removed ${result.count} old audit entries`,
       deletedCount: result.count,
       cutoffDate,
     };

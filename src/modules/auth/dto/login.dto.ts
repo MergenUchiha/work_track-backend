@@ -4,17 +4,17 @@ import { ApiProperty } from '@nestjs/swagger';
 export class LoginDto {
   @ApiProperty({
     example: 'user@example.com',
-    description: 'Email пользователя',
+    description: 'User email',
   })
-  @IsEmail({}, { message: 'Некорректный формат email' })
+  @IsEmail({}, { message: 'Invalid email format' })
   email: string;
 
   @ApiProperty({
     example: 'password123',
-    description: 'Пароль пользователя',
+    description: 'User password',
     minLength: 6,
   })
   @IsString()
-  @MinLength(6, { message: 'Пароль должен содержать минимум 6 символов' })
+  @MinLength(6, { message: 'Password must be at least 6 characters' })
   password: string;
 }

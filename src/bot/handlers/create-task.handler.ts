@@ -32,28 +32,27 @@ export class CreateTaskHandler {
       const user = await this.botService.getOrCreateUser(ctx);
       ctx.user = user;
 
-      // Проверяем права
       if (user.role !== UserRole.ADMIN && user.role !== UserRole.MANAGER) {
-        await ctx.reply('❌ Только администраторы и менеджеры могут создавать заказы.');
+        await ctx.reply('❌ Only administrators and managers can create orders.');
         return;
       }
 
-      // Инициализируем сессию
+      // Start a fresh wizard session
       this.sessions.set(ctx.from!.id, {
         step: 'title',
         data: {},
       });
 
       await ctx.reply(
-        '📝 <b>Создание нового заказа</b>\n\n' +
-          'Шаг 1/4: Введите <b>название</b> заказа:\n' +
-          '<i>(например: "Разработка модуля аутентификации")</i>\n\n' +
-          'Отправьте /cancel для отмены.',
+        '📝 <b>New order</b>\n\n' +
+          'Step 1/4: send the order <b>title</b>:\n' +
+          '<i>(for example: "Build the authentication module")</i>\n\n' +
+          'Send /cancel to stop.',
         { parse_mode: 'HTML' },
       );
     } catch (error) {
       this.logger.error(`Error in /create handler: ${error.message}`, error.stack);
-      await ctx.reply('❌ Не удалось начать создание заказа.');
+      await ctx.reply('❌ Could not start the order wizard.');
     }
   }
 
@@ -62,9 +61,9 @@ export class CreateTaskHandler {
     const session = this.sessions.get(ctx.from!.id);
     if (session) {
       this.sessions.delete(ctx.from!.id);
-      await ctx.reply('❌ Создание заказа отменено.');
+      await ctx.reply('❌ Order creation cancelled.');
     } else {
-      await ctx.reply('ℹ️ Нет активного процесса создания заказа.');
+      await ctx.reply('ℹ️ There is no order being created right now.');
     }
   }
 
@@ -79,14 +78,13 @@ export class CreateTaskHandler {
       switch (session.step) {
         case 'title':
           if (text.length < 3) {
-            await ctx.reply('❌ Название должно содержать минимум 3 символа.');
+            await ctx.reply('❌ The title must be at least 3 characters.');
             return;
           }
           session.data.title = text;
           session.step = 'description';
           await ctx.reply(
-            '📝 Шаг 2/4: Введите <b>описание</b> заказа:\n' +
-              '<i>(или отправьте "-" чтобы пропустить)</i>',
+            '📝 Step 2/4: send a <b>description</b>:\n' + '<i>(or send "-" to skip)</i>',
             { parse_mode: 'HTML' },
           );
           break;
@@ -94,39 +92,45 @@ export class CreateTaskHandler {
         case 'description':
           session.data.description = text === '-' ? undefined : text;
           session.step = 'priority';
-          await ctx.reply('🎯 Шаг 3/4: Выберите <b>приоритет</b>:', {
+          await ctx.reply('🎯 Step 3/4: choose a <b>priority</b>:', {
             parse_mode: 'HTML',
             reply_markup: Markup.inlineKeyboard([
               [
-                Markup.button.callback('🟢 Низкий', 'priority_LOW'),
-                Markup.button.callback('🟡 Средний', 'priority_MEDIUM'),
-                Markup.button.callback('🔴 Высокий', 'priority_HIGH'),
+                Markup.button.callback('🟢 Low', 'priority_LOW'),
+                Markup.button.callback('🟡 Medium', 'priority_MEDIUM'),
+                Markup.button.callback('🔴 High', 'priority_HIGH'),
               ],
             ]).reply_markup,
           });
           break;
 
-        case 'deadline':
-          // Парсим дату
+        case 'deadline': {
+          // "-" skips the deadline, as offered in the prompt
+          if (text.trim() === '-') {
+            session.data.deadline = undefined;
+            await this.createOrder(ctx, session);
+            break;
+          }
+
           const parsedDate = this.parseDate(text);
           if (!parsedDate) {
             await ctx.reply(
-              '❌ Некорректный формат даты.\n' +
-                'Используйте формат: ДД.ММ.ГГГГ ЧЧ:ММ\n' +
-                'Например: 31.12.2026 23:59',
+              '❌ Invalid date.\n' +
+                'Use the format DD.MM.YYYY HH:MM\n' +
+                'For example: 31.12.2026 23:59\n' +
+                'The deadline must be in the future.',
             );
             return;
           }
 
           session.data.deadline = parsedDate.toISOString();
-
-          // Создаём заказ
           await this.createOrder(ctx, session);
           break;
+        }
       }
     } catch (error) {
       this.logger.error(`Error in text handler: ${error.message}`, error.stack);
-      await ctx.reply('❌ Произошла ошибка. Попробуйте снова.');
+      await ctx.reply('❌ Something went wrong. Please try again.');
     }
   }
 
@@ -144,20 +148,20 @@ export class CreateTaskHandler {
       session.step = 'deadline';
 
       await ctx.answerCbQuery();
-      await ctx.editMessageText(`🎯 Приоритет: ${this.botService.formatPriority(priority)}`, {
+      await ctx.editMessageText(`🎯 Priority: ${this.botService.formatPriority(priority)}`, {
         parse_mode: 'HTML',
       });
 
       await ctx.reply(
-        '⏰ Шаг 4/4: Введите <b>дедлайн</b>:\n' +
-          'Формат: <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>\n' +
-          'Например: <code>31.12.2026 23:59</code>\n\n' +
-          '<i>(или отправьте "-" чтобы пропустить)</i>',
+        '⏰ Step 4/4: send a <b>deadline</b>:\n' +
+          'Format: <code>DD.MM.YYYY HH:MM</code>\n' +
+          'For example: <code>31.12.2026 23:59</code>\n\n' +
+          '<i>(or send "-" to skip)</i>',
         { parse_mode: 'HTML' },
       );
     } catch (error) {
       this.logger.error(`Error in callback handler: ${error.message}`, error.stack);
-      await ctx.answerCbQuery('❌ Ошибка');
+      await ctx.answerCbQuery('❌ Error');
     }
   }
 
@@ -177,11 +181,11 @@ export class CreateTaskHandler {
       );
 
       await ctx.reply(
-        '✅ <b>Заказ успешно создан!</b>\n\n' +
+        '✅ <b>Order created</b>\n\n' +
           `🔹 <b>${order.title}</b>\n` +
-          `📊 Статус: ${this.botService.formatStatus(order.status)}\n` +
-          `🎯 Приоритет: ${this.botService.formatPriority(order.priority)}\n` +
-          `${order.deadline ? `⏰ Дедлайн: ${this.botService.formatDate(order.deadline)}\n` : ''}` +
+          `📊 Status: ${this.botService.formatStatus(order.status)}\n` +
+          `🎯 Priority: ${this.botService.formatPriority(order.priority)}\n` +
+          `${order.deadline ? `⏰ Deadline: ${this.botService.formatDate(order.deadline)}\n` : ''}` +
           `\n<code>ID: ${order.id}</code>`,
         { parse_mode: 'HTML' },
       );
@@ -189,7 +193,7 @@ export class CreateTaskHandler {
       this.sessions.delete(ctx.from!.id);
     } catch (error) {
       this.logger.error(`Failed to create order: ${error.message}`, error.stack);
-      await ctx.reply('❌ Не удалось создать заказ.\n' + 'Возможно, вы ввели некорректные данные.');
+      await ctx.reply('❌ Could not create the order.\n' + 'Please check the values you entered.');
     }
   }
 
@@ -197,7 +201,7 @@ export class CreateTaskHandler {
     if (text === '-') return null;
 
     try {
-      // Формат: ДД.ММ.ГГГГ ЧЧ:ММ
+      // Expected format: DD.MM.YYYY HH:MM
       const regex = /^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/;
       const match = text.match(regex);
 
@@ -212,9 +216,8 @@ export class CreateTaskHandler {
         parseInt(minutes),
       );
 
-      // Проверяем валидность
       if (isNaN(date.getTime())) return null;
-      if (date < new Date()) return null; // Дедлайн не может быть в прошлом
+      if (date < new Date()) return null; // a deadline in the past is rejected
 
       return date;
     } catch {

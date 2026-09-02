@@ -9,9 +9,20 @@ import {
 import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 
+/** Field names that must never reach the logs in clear text. */
+const SENSITIVE_FIELDS = [
+  'password',
+  'newPassword',
+  'oldPassword',
+  'passwordHash',
+  'token',
+  'accessToken',
+  'refreshToken',
+];
+
 /**
- * Глобальный фильтр для обработки всех исключений в приложении
- * Логирует ошибки и возвращает стандартизированный формат ответа
+ * Catches every unhandled exception, logs it and returns one consistent
+ * error shape to the client.
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -21,12 +32,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
+    const isProduction = process.env.NODE_ENV === 'production';
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message: string | string[] = 'Внутренняя ошибка сервера';
+    let message: string | string[] = 'Internal server error';
     let error = 'Internal Server Error';
 
-    // Обработка HTTP исключений (NestJS)
+    // NestJS HTTP exceptions
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
@@ -39,26 +51,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
         error = (exceptionResponse as any).error || exception.name;
       }
     }
-    // Обработка ошибок Prisma
+    // Known Prisma errors, mapped to sensible HTTP statuses
     else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       const prismaError = this.handlePrismaError(exception);
       status = prismaError.status;
       message = prismaError.message;
       error = prismaError.error;
     }
-    // Обработка ошибок валидации Prisma
+    // Prisma validation errors
     else if (exception instanceof Prisma.PrismaClientValidationError) {
       status = HttpStatus.BAD_REQUEST;
-      message = 'Ошибка валидации данных';
+      message = 'Data validation error';
       error = 'Validation Error';
     }
-    // Необработанные ошибки
+    // Anything else
     else if (exception instanceof Error) {
       message = exception.message;
       error = exception.name;
     }
 
-    // Формируем объект ошибки для логирования
     const errorLog = {
       timestamp: new Date().toISOString(),
       path: request.url,
@@ -66,7 +77,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       statusCode: status,
       error,
       message,
-      ...(process.env.NODE_ENV !== 'production' && {
+      ...(!isProduction && {
         stack: exception instanceof Error ? exception.stack : undefined,
       }),
       user: (request as any).user
@@ -75,11 +86,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
             email: (request as any).user.email,
           }
         : undefined,
-      body: request.body,
+      // Redacted: a failed login would otherwise write the password to the log.
+      body: this.redact(request.body),
       query: request.query,
     };
 
-    // Логируем ошибку
     if (status >= 500) {
       this.logger.error(
         `[${request.method}] ${request.url} - ${status}`,
@@ -92,7 +103,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       );
     }
 
-    // Формируем ответ
     const errorResponse = {
       statusCode: status,
       timestamp: new Date().toISOString(),
@@ -100,8 +110,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       method: request.method,
       error,
       message,
-      // Добавляем stack trace только в dev режиме
-      ...(process.env.NODE_ENV !== 'production' &&
+      // Stack traces are for developers, not for clients
+      ...(!isProduction &&
         exception instanceof Error && {
           stack: exception.stack,
         }),
@@ -110,29 +120,45 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(errorResponse);
   }
 
-  /**
-   * Обработка специфичных ошибок Prisma
-   */
+  /** Replaces credential-like values with a placeholder before logging. */
+  private redact(body: unknown): unknown {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return body;
+    }
+
+    const copy: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+
+    for (const field of SENSITIVE_FIELDS) {
+      if (field in copy) {
+        copy[field] = '[REDACTED]';
+      }
+    }
+
+    return copy;
+  }
+
+  /** Maps Prisma error codes to HTTP responses. */
   private handlePrismaError(error: Prisma.PrismaClientKnownRequestError): {
     status: number;
     message: string;
     error: string;
   } {
     switch (error.code) {
-      case 'P2002':
+      case 'P2002': {
         // Unique constraint violation
         const target = (error.meta?.target as string[]) || [];
         return {
           status: HttpStatus.CONFLICT,
-          message: `Запись с таким ${target.join(', ')} уже существует`,
+          message: `A record with this ${target.join(', ')} already exists`,
           error: 'Conflict',
         };
+      }
 
       case 'P2025':
         // Record not found
         return {
           status: HttpStatus.NOT_FOUND,
-          message: 'Запись не найдена',
+          message: 'Record not found',
           error: 'Not Found',
         };
 
@@ -140,7 +166,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         // Foreign key constraint violation
         return {
           status: HttpStatus.BAD_REQUEST,
-          message: 'Связанная запись не найдена',
+          message: 'Related record not found',
           error: 'Bad Request',
         };
 
@@ -148,14 +174,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         // Required relation violation
         return {
           status: HttpStatus.BAD_REQUEST,
-          message: 'Невозможно выполнить операцию из-за связанных записей',
+          message: 'Operation blocked by related records',
           error: 'Bad Request',
         };
 
       default:
         return {
           status: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: 'Ошибка базы данных',
+          message: 'Database error',
           error: 'Database Error',
         };
     }

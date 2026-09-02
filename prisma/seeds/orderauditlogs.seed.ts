@@ -1,11 +1,7 @@
 import { PrismaClient, Orders, Users, OrderAuditLogs } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 
-export async function seedOrderAuditLogs(
-  prisma: PrismaClient,
-  orders: Orders[],
-  users: Users[],
-) {
+export async function seedOrderAuditLogs(prisma: PrismaClient, orders: Orders[], users: Users[]) {
   const createdLogs: OrderAuditLogs[] = [];
 
   const actions = [
@@ -20,7 +16,7 @@ export async function seedOrderAuditLogs(
   ];
 
   for (const order of orders) {
-    // Для каждого заказа создаем от 1 до 5 записей аудита
+    // 1 to 5 audit entries per order
     const logsCount = faker.number.int({ min: 1, max: 5 });
     let currentDate = new Date(order.createdAt);
 
@@ -30,7 +26,7 @@ export async function seedOrderAuditLogs(
       let newValue: any = null;
 
       if (i === 0) {
-        // Первая запись - всегда создание заказа
+        // The first entry is always the creation event
         action = 'ORDER_CREATED';
         newValue = {
           title: order.title,
@@ -38,7 +34,7 @@ export async function seedOrderAuditLogs(
           priority: order.priority,
         };
       } else {
-        // Остальные записи - различные изменения
+        // Followed by a few random changes
         action = faker.helpers.arrayElement(actions.filter((a) => a !== 'ORDER_CREATED'));
 
         switch (action) {
@@ -83,7 +79,7 @@ export async function seedOrderAuditLogs(
         }
       }
 
-      // Добавляем небольшой интервал между изменениями (от 1 часа до 5 дней)
+      // Space the changes out by 1 hour to 5 days
       currentDate = new Date(
         currentDate.getTime() + faker.number.int({ min: 3600000, max: 432000000 }),
       );

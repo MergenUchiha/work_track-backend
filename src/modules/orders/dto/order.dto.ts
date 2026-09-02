@@ -32,70 +32,70 @@ export class OrderAssigneeDto {
 export class OrderDto {
   @ApiProperty({
     example: '660e8400-e29b-41d4-a716-446655440001',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   id: string;
 
   @ApiProperty({
-    example: 'Разработка нового модуля аутентификации',
-    description: 'Название заказа',
+    example: 'Build the new authentication module',
+    description: 'Order title',
   })
   title: string;
 
   @ApiPropertyOptional({
-    example: 'Необходимо реализовать JWT аутентификацию',
-    description: 'Описание заказа',
+    example: 'Implement JWT authentication',
+    description: 'Description',
   })
   description: string | null;
 
   @ApiProperty({
     enum: OrderStatus,
     example: OrderStatus.IN_PROGRESS,
-    description: 'Текущий статус заказа',
+    description: 'Current status',
   })
   status: OrderStatus;
 
   @ApiProperty({
     enum: OrderPriority,
     example: OrderPriority.HIGH,
-    description: 'Приоритет заказа',
+    description: 'Priority',
   })
   priority: OrderPriority;
 
   @ApiPropertyOptional({
     example: '2024-12-31T23:59:59.000Z',
-    description: 'Крайний срок выполнения',
+    description: 'Deadline',
   })
   deadline: Date | null;
 
   @ApiProperty({
     example: '2024-01-01T00:00:00.000Z',
-    description: 'Дата создания',
+    description: 'Created at',
   })
   createdAt: Date;
 
   @ApiProperty({
     example: '2024-01-15T10:30:00.000Z',
-    description: 'Дата последнего обновления',
+    description: 'Last updated at',
   })
   updatedAt: Date;
 
   @ApiProperty({
     type: OrderCreatorDto,
-    description: 'Создатель заказа',
+    description: 'Creator',
   })
   createdBy: OrderCreatorDto;
 
   @ApiPropertyOptional({
     type: OrderAssigneeDto,
-    description: 'Исполнитель заказа',
+    description: 'Assignee',
     nullable: true,
   })
   assignedTo: OrderAssigneeDto | null;
 
   @ApiPropertyOptional({
     example: false,
-    description: 'Признак просроченного заказа',
+    description: 'Whether the deadline has passed',
   })
   isOverdue?: boolean;
 }

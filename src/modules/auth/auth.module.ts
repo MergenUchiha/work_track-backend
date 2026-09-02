@@ -13,7 +13,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     ConfigModule,
     PrismaModule,
     PassportModule,
-    JwtModule.register({}), // Конфигурация в strategies
+    JwtModule.register({}), // signing options are supplied per call
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtAccessStrategy, JwtRefreshStrategy],

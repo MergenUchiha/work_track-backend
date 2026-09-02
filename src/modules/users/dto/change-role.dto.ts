@@ -3,14 +3,14 @@ import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 
 /**
- * DTO для смены роли пользователя (только админ)
+ * Changes a user's role. Admin only.
  */
 export class ChangeRoleDto {
   @ApiProperty({
     enum: UserRole,
     example: UserRole.MANAGER,
-    description: 'Новая роль пользователя',
+    description: 'New role',
   })
-  @IsEnum(UserRole, { message: 'Некорректная роль. Доступные: ADMIN, MANAGER, WORKER' })
+  @IsEnum(UserRole, { message: 'Invalid role. Allowed values: ADMIN, MANAGER, WORKER' })
   role: UserRole;
 }

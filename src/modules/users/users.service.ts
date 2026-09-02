@@ -17,7 +17,7 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Получить профиль текущего пользователя
+   * Returns the profile of the current user.
    */
   async getProfile(userId: string) {
     const user = await this.prisma.users.findUnique({
@@ -34,14 +34,14 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('Пользователь не найден');
+      throw new NotFoundException('User not found');
     }
 
     return user;
   }
 
   /**
-   * Получить пользователя по ID
+   * Returns a user by id, subject to role rules.
    */
   async getUserById(userId: string, requestUserId: string, requestUserRole: string) {
     const user = await this.prisma.users.findUnique({
@@ -58,24 +58,23 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('Пользователь не найден');
+      throw new NotFoundException('User not found');
     }
 
-    // Обычные пользователи могут видеть только свой профиль
+    // Workers may only read their own profile
     if (
       requestUserRole !== UserRole.ADMIN &&
       requestUserRole !== UserRole.MANAGER &&
       userId !== requestUserId
     ) {
-      throw new ForbiddenException('Недостаточно прав для просмотра этого пользователя');
+      throw new ForbiddenException('Insufficient permissions to view this user');
     }
 
     return user;
   }
 
   /**
-   * Получить список всех пользователей (только для админов и менеджеров)
-   * С пагинацией, фильтрацией и поиском
+   * Lists users with pagination, filtering and search. Admins and managers only.
    */
   async getUsers(query: GetUsersQueryDto) {
     const {
@@ -88,7 +87,7 @@ export class UsersService {
       sortOrder = 'desc',
     } = query;
 
-    // Формируем условия фильтрации
+    // Build the filter
     const where: Prisma.UsersWhereInput = {};
 
     if (role) {
@@ -106,10 +105,10 @@ export class UsersService {
       ];
     }
 
-    // Подсчитываем общее количество
+    // Total count for pagination metadata
     const total = await this.prisma.users.count({ where });
 
-    // Получаем пользователей с пагинацией
+    // Page of users
     const users = await this.prisma.users.findMany({
       where,
       select: {
@@ -138,17 +137,17 @@ export class UsersService {
   }
 
   /**
-   * Обновить свой профиль
+   * Updates the current user's own profile.
    */
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    // Если обновляется email, проверяем уникальность
+    // Email must stay unique
     if (dto.email) {
       const existingUser = await this.prisma.users.findUnique({
         where: { email: dto.email },
       });
 
       if (existingUser && existingUser.id !== userId) {
-        throw new ConflictException('Пользователь с таким email уже существует');
+        throw new ConflictException('A user with this email already exists');
       }
     }
 
@@ -170,24 +169,22 @@ export class UsersService {
   }
 
   /**
-   * Изменить роль пользователя (только админ)
+   * Changes a user's role. Admin only.
    */
   async changeRole(userId: string, dto: ChangeRoleDto, adminId: string) {
-    // Проверяем, что пользователь существует
     const user = await this.prisma.users.findUnique({
       where: { id: userId },
     });
 
     if (!user) {
-      throw new NotFoundException('Пользователь не найден');
+      throw new NotFoundException('User not found');
     }
 
-    // Запрещаем админу изменять свою роль
+    // An admin must not be able to demote themselves
     if (userId === adminId) {
-      throw new BadRequestException('Невозможно изменить собственную роль');
+      throw new BadRequestException('You cannot change your own role');
     }
 
-    // Обновляем роль
     const updatedUser = await this.prisma.users.update({
       where: { id: userId },
       data: { role: dto.role },
@@ -206,24 +203,22 @@ export class UsersService {
   }
 
   /**
-   * Заблокировать/разблокировать пользователя (только админ)
+   * Blocks or unblocks a user. Admin only.
    */
   async toggleActive(userId: string, dto: ToggleActiveDto, adminId: string) {
-    // Проверяем, что пользователь существует
     const user = await this.prisma.users.findUnique({
       where: { id: userId },
     });
 
     if (!user) {
-      throw new NotFoundException('Пользователь не найден');
+      throw new NotFoundException('User not found');
     }
 
-    // Запрещаем админу блокировать самого себя
+    // An admin must not be able to lock themselves out
     if (userId === adminId) {
-      throw new BadRequestException('Невозможно изменить статус собственного аккаунта');
+      throw new BadRequestException('You cannot change your own status');
     }
 
-    // Обновляем статус
     const updatedUser = await this.prisma.users.update({
       where: { id: userId },
       data: { isActive: dto.isActive },
@@ -238,7 +233,7 @@ export class UsersService {
       },
     });
 
-    // Если пользователь заблокирован, отзываем все его refresh токены
+    // Blocking a user must also end their active sessions
     if (!dto.isActive) {
       await this.prisma.refreshTokens.deleteMany({
         where: { userId },
@@ -249,7 +244,7 @@ export class UsersService {
   }
 
   /**
-   * Получить статистику по пользователям (для админов)
+   * Aggregate user statistics. Admin only.
    */
   async getUsersStats() {
     const [total, active, inactive, byRole] = await Promise.all([
@@ -274,11 +269,11 @@ export class UsersService {
   }
 
   /**
-   * Удалить пользователя (мягкое удаление - деактивация)
+   * Soft-deletes a user by deactivating the account.
    */
   async softDeleteUser(userId: string, adminId: string) {
     if (userId === adminId) {
-      throw new BadRequestException('Невозможно удалить собственный аккаунт');
+      throw new BadRequestException('You cannot delete your own account');
     }
 
     const user = await this.prisma.users.findUnique({
@@ -286,20 +281,19 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('Пользователь не найден');
+      throw new NotFoundException('User not found');
     }
 
-    // Деактивируем пользователя
     await this.prisma.users.update({
       where: { id: userId },
       data: { isActive: false },
     });
 
-    // Отзываем все refresh токены
+    // End all sessions
     await this.prisma.refreshTokens.deleteMany({
       where: { userId },
     });
 
-    return { message: 'Пользователь успешно деактивирован' };
+    return { message: 'User deactivated successfully' };
   }
 }

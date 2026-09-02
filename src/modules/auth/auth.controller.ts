@@ -13,82 +13,70 @@ import { CurrentUser, JwtPayload } from './decorators/current-user.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  /**
-   * Регистрация нового пользователя
-   */
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Регистрация нового пользователя' })
+  @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({
     status: 201,
-    description: 'Пользователь успешно зарегистрирован',
+    description: 'User registered successfully',
     type: AuthResponseDto,
   })
   @ApiResponse({
     status: 409,
-    description: 'Пользователь с таким email уже существует',
+    description: 'A user with this email already exists',
   })
   @ApiResponse({
     status: 400,
-    description: 'Некорректные данные',
+    description: 'Invalid request body',
   })
   async register(@Body() dto: RegisterDto): Promise<AuthResponseDto> {
     return this.authService.register(dto);
   }
 
-  /**
-   * Вход пользователя
-   */
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Вход в систему' })
+  @ApiOperation({ summary: 'Sign in' })
   @ApiResponse({
     status: 200,
-    description: 'Успешный вход',
+    description: 'Signed in successfully',
     type: AuthResponseDto,
   })
   @ApiResponse({
     status: 401,
-    description: 'Неверный email или пароль',
+    description: 'Invalid email or password',
   })
   async login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(dto);
   }
 
-  /**
-   * Обновление токенов
-   */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Обновление access и refresh токенов' })
+  @ApiOperation({ summary: 'Rotate the access and refresh tokens' })
   @ApiBody({ type: RefreshDto })
   @ApiResponse({
     status: 200,
-    description: 'Токены успешно обновлены',
+    description: 'Tokens rotated successfully',
     type: RefreshResponseDto,
   })
   @ApiResponse({
     status: 401,
-    description: 'Недействительный refresh токен',
+    description: 'Invalid refresh token',
   })
   async refresh(@Body() dto: RefreshDto): Promise<RefreshResponseDto> {
     return this.authService.refresh(dto.refreshToken);
   }
 
-  /**
-   * Выход из системы
-   */
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Выход из системы (отзыв refresh токена)' })
+  @ApiOperation({ summary: 'Sign out (revokes the refresh token)' })
   @ApiBody({ type: RefreshDto })
   @ApiResponse({
     status: 200,
-    description: 'Успешный выход',
+    description: 'Signed out successfully',
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Успешный выход из системы' },
+        message: { type: 'string', example: 'Signed out successfully' },
       },
     },
   })
@@ -96,47 +84,41 @@ export class AuthController {
     return this.authService.logout(dto.refreshToken);
   }
 
-  /**
-   * Завершение всех сессий пользователя
-   */
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Завершить все сессии (отозвать все refresh токены)' })
+  @ApiOperation({ summary: 'End all sessions (revokes every refresh token)' })
   @ApiResponse({
     status: 200,
-    description: 'Все сессии завершены',
+    description: 'All sessions have been ended',
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Все сессии завершены' },
+        message: { type: 'string', example: 'All sessions have been ended' },
       },
     },
   })
   @ApiResponse({
     status: 401,
-    description: 'Не авторизован',
+    description: 'Unauthorized',
   })
   async logoutAll(@CurrentUser('sub') userId: string) {
     return this.authService.logoutAll(userId);
   }
 
-  /**
-   * Получение информации о текущем пользователе
-   */
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Получить профиль текущего пользователя' })
+  @ApiOperation({ summary: 'Get the current user profile' })
   @ApiResponse({
     status: 200,
-    description: 'Профиль пользователя',
+    description: 'Current user profile',
     type: UserResponseDto,
   })
   @ApiResponse({
     status: 401,
-    description: 'Не авторизован',
+    description: 'Unauthorized',
   })
   getProfile(@CurrentUser() user: JwtPayload) {
     return user;

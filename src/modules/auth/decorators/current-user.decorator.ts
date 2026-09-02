@@ -9,7 +9,7 @@ export interface JwtPayload {
 }
 
 /**
- * Декоратор для получения текущего аутентифицированного пользователя из JWT
+ * Reads the authenticated user that JwtAuthGuard put on the request.
  *
  * @example
  * ```typescript
@@ -19,7 +19,7 @@ export interface JwtPayload {
  *   return user;
  * }
  *
- * // Получить только userId
+ * // Read a single field
  * @Get('my-id')
  * @UseGuards(JwtAuthGuard)
  * getMyId(@CurrentUser('sub') userId: string) {

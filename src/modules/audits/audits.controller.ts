@@ -32,46 +32,43 @@ import { AuditLogDto } from './dto/audit-log.dto';
 export class AuditsController {
   constructor(private readonly auditsService: AuditsService) {}
 
-  /**
-   * Получить все аудит логи (только админ)
-   */
   @Get('logs')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Получить все аудит логи с фильтрацией',
-    description: 'Доступно только администраторам',
+    summary: 'List audit log entries with filtering',
+    description: 'Admins only',
   })
   @ApiResponse({
     status: 200,
-    description: 'Список аудит логов',
+    description: 'Audit log entries',
     type: PaginatedAuditLogsDto,
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async getLogs(@Query() query: GetAuditLogsQueryDto) {
     return this.auditsService.getLogs(query);
   }
 
   /**
-   * Получить логи для конкретного заказа
+   * Returns the full audit trail of one order.
    */
   @Get('logs/order/:orderId')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
-    summary: 'Получить логи для конкретного заказа',
-    description: 'Доступно администраторам и менеджерам',
+    summary: 'Get the audit trail of an order',
+    description: 'Admins and managers only',
   })
   @ApiParam({
     name: 'orderId',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'История изменений заказа',
+    description: 'Order change history',
     type: [AuditLogDto],
   })
   async getOrderLogs(@Param('orderId') orderId: string) {
@@ -79,51 +76,48 @@ export class AuditsController {
   }
 
   /**
-   * Получить логи для конкретного пользователя
+   * Returns the recent actions of one user.
    */
   @Get('logs/user/:userId')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Получить логи действий конкретного пользователя',
-    description: 'Доступно только администраторам',
+    summary: 'Get the action history of a user',
+    description: 'Admins only',
   })
   @ApiParam({
     name: 'userId',
-    description: 'UUID пользователя',
+    description: 'User UUID',
   })
   @ApiQuery({
     name: 'limit',
     required: false,
     type: Number,
-    description: 'Максимальное количество логов (по умолчанию 50)',
+    description: 'Maximum number of entries (default 50)',
   })
   @ApiResponse({
     status: 200,
-    description: 'История действий пользователя',
+    description: 'User action history',
     type: [AuditLogDto],
   })
   async getUserLogs(@Param('userId') userId: string, @Query('limit') limit?: number) {
     return this.auditsService.getUserLogs(userId, limit);
   }
 
-  /**
-   * Получить мои действия
-   */
   @Get('logs/my-activity')
   @ApiOperation({
-    summary: 'Получить историю своих действий',
-    description: 'Пользователь видит свою активность',
+    summary: 'Get your own action history',
+    description: 'Returns the current user activity',
   })
   @ApiQuery({
     name: 'limit',
     required: false,
     type: Number,
-    description: 'Максимальное количество логов (по умолчанию 50)',
+    description: 'Maximum number of entries (default 50)',
   })
   @ApiResponse({
     status: 200,
-    description: 'История моих действий',
+    description: 'Your action history',
     type: [AuditLogDto],
   })
   async getMyActivity(@CurrentUser('sub') userId: string, @Query('limit') limit?: number) {
@@ -131,30 +125,30 @@ export class AuditsController {
   }
 
   /**
-   * Получить статистику по действиям
+   * Aggregates actions by type over a date range.
    */
   @Get('stats')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Получить статистику по действиям',
-    description: 'Доступно только администраторам',
+    summary: 'Get action statistics',
+    description: 'Admins only',
   })
   @ApiQuery({
     name: 'dateFrom',
     required: false,
     type: String,
-    description: 'Начальная дата (YYYY-MM-DD)',
+    description: 'Start date (YYYY-MM-DD)',
   })
   @ApiQuery({
     name: 'dateTo',
     required: false,
     type: String,
-    description: 'Конечная дата (YYYY-MM-DD)',
+    description: 'End date (YYYY-MM-DD)',
   })
   @ApiResponse({
     status: 200,
-    description: 'Статистика действий',
+    description: 'Action statistics',
     schema: {
       type: 'object',
       properties: {
@@ -194,25 +188,22 @@ export class AuditsController {
     return this.auditsService.getActionStats(dateFrom, dateTo);
   }
 
-  /**
-   * Получить последние действия
-   */
   @Get('logs/recent')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
-    summary: 'Получить последние действия в системе',
-    description: 'Доступно администраторам и менеджерам',
+    summary: 'Get the most recent actions',
+    description: 'Admins and managers only',
   })
   @ApiQuery({
     name: 'limit',
     required: false,
     type: Number,
-    description: 'Количество логов (по умолчанию 20)',
+    description: 'Number of entries (default 20)',
   })
   @ApiResponse({
     status: 200,
-    description: 'Последние действия',
+    description: 'Recent actions',
     type: [AuditLogDto],
   })
   async getRecentLogs(@Query('limit') limit?: number) {
@@ -220,55 +211,52 @@ export class AuditsController {
   }
 
   /**
-   * Получить историю изменений конкретного поля
+   * Returns how one field of an order changed over time.
    */
   @Get('logs/order/:orderId/field/:field')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
-    summary: 'Получить историю изменений конкретного поля заказа',
-    description: 'Доступно администраторам и менеджерам',
+    summary: 'Get the change history of one order field',
+    description: 'Admins and managers only',
   })
   @ApiParam({
     name: 'orderId',
-    description: 'UUID заказа',
+    description: 'Order UUID',
   })
   @ApiParam({
     name: 'field',
-    description: 'Название поля (например: status, priority, assignedToId)',
+    description: 'Field name, e.g. status, priority, assignedToId',
   })
   @ApiResponse({
     status: 200,
-    description: 'История изменений поля',
+    description: 'Field change history',
   })
   async getFieldHistory(@Param('orderId') orderId: string, @Param('field') field: string) {
     return this.auditsService.getFieldHistory(orderId, field);
   }
 
-  /**
-   * Очистить старые логи (только админ)
-   */
   @Delete('logs/cleanup')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Очистить старые логи',
-    description: 'Удаляет логи старше указанного количества дней. Доступно только администраторам.',
+    summary: 'Delete old audit entries',
+    description: 'Deletes entries older than the given number of days. Admins only.',
   })
   @ApiQuery({
     name: 'days',
     required: false,
     type: Number,
-    description: 'Количество дней для хранения логов (по умолчанию 90)',
+    description: 'Retention window in days (default 90)',
   })
   @ApiResponse({
     status: 200,
-    description: 'Логи успешно очищены',
+    description: 'Old entries removed',
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Удалено 150 старых логов' },
+        message: { type: 'string', example: 'Removed 150 old audit entries' },
         deletedCount: { type: 'number', example: 150 },
         cutoffDate: { type: 'string', example: '2023-10-01T00:00:00.000Z' },
       },

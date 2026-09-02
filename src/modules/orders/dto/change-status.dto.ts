@@ -6,10 +6,10 @@ export class ChangeStatusDto {
   @ApiProperty({
     enum: OrderStatus,
     example: OrderStatus.IN_PROGRESS,
-    description: 'Новый статус заказа',
+    description: 'New order status',
   })
   @IsEnum(OrderStatus, {
-    message: 'Некорректный статус. Доступные: NEW, IN_PROGRESS, DONE, CANCELLED',
+    message: 'Invalid status. Allowed values: NEW, IN_PROGRESS, DONE, CANCELLED',
   })
   status: OrderStatus;
 }

@@ -4,12 +4,12 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 
 /**
- * DTO для query параметров получения списка пользователей
+ * Query parameters for listing users.
  */
 export class GetUsersQueryDto {
   @ApiPropertyOptional({
     example: 1,
-    description: 'Номер страницы',
+    description: 'Page number',
     minimum: 1,
     default: 1,
   })
@@ -21,7 +21,7 @@ export class GetUsersQueryDto {
 
   @ApiPropertyOptional({
     example: 10,
-    description: 'Количество элементов на странице',
+    description: 'Items per page',
     minimum: 1,
     default: 10,
   })
@@ -34,7 +34,7 @@ export class GetUsersQueryDto {
   @ApiPropertyOptional({
     enum: UserRole,
     example: UserRole.WORKER,
-    description: 'Фильтр по роли',
+    description: 'Filter by role',
   })
   @IsOptional()
   @IsEnum(UserRole)
@@ -42,7 +42,7 @@ export class GetUsersQueryDto {
 
   @ApiPropertyOptional({
     example: true,
-    description: 'Фильтр по статусу активности',
+    description: 'Filter by active status',
   })
   @IsOptional()
   @Transform(({ value }) => {
@@ -55,7 +55,7 @@ export class GetUsersQueryDto {
 
   @ApiPropertyOptional({
     example: 'john',
-    description: 'Поиск по имени или email',
+    description: 'Search by name or email',
   })
   @IsOptional()
   @IsString()
@@ -63,7 +63,7 @@ export class GetUsersQueryDto {
 
   @ApiPropertyOptional({
     example: 'createdAt',
-    description: 'Поле для сортировки',
+    description: 'Field to sort by',
     enum: ['createdAt', 'updatedAt', 'name', 'email'],
     default: 'createdAt',
   })
@@ -73,7 +73,7 @@ export class GetUsersQueryDto {
 
   @ApiPropertyOptional({
     example: 'desc',
-    description: 'Направление сортировки',
+    description: 'Sort direction',
     enum: ['asc', 'desc'],
     default: 'desc',
   })
@@ -83,12 +83,12 @@ export class GetUsersQueryDto {
 }
 
 /**
- * DTO для пагинированного ответа со списком пользователей
+ * Paginated list of users.
  */
 export class PaginatedUsersDto {
   @ApiPropertyOptional({
     type: [Object],
-    description: 'Список пользователей',
+    description: 'Users',
   })
   data: any[];
 
@@ -99,7 +99,7 @@ export class PaginatedUsersDto {
       limit: 10,
       totalPages: 10,
     },
-    description: 'Метаданные пагинации',
+    description: 'Pagination metadata',
   })
   meta: {
     total: number;

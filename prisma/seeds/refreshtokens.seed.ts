@@ -5,34 +5,33 @@ import * as crypto from 'crypto';
 export async function seedRefreshTokens(prisma: PrismaClient, users: Users[]) {
   const createdTokens: RefreshTokens[] = [];
 
-  // Для активных пользователей создаем от 0 до 3 refresh токенов
+  // 0 to 3 refresh tokens per active user
   for (const user of users) {
     if (!user.isActive) continue;
 
     const tokensCount = faker.number.int({ min: 0, max: 3 });
 
     for (let i = 0; i < tokensCount; i++) {
-      // Генерируем случайный токен и его хеш
+      // Random token plus the hash that would be stored
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-      // Определяем срок действия токена
-      // 70% токенов валидны, 30% просрочены
+      // 70% of the tokens are still valid, 30% have expired
       const isExpired = faker.datatype.boolean({ probability: 0.3 });
-      
+
       let expiresAt: Date;
       if (isExpired) {
-        // Просроченный токен (от 1 до 30 дней назад)
+        // Expired 1 to 30 days ago
         expiresAt = faker.date.recent({ days: 30 });
       } else {
-        // Валидный токен (от текущего момента до 30 дней вперед)
+        // Valid for up to 30 more days
         expiresAt = faker.date.soon({ days: 30 });
       }
 
-      // Некоторые токены могут быть отозваны
+      // Some tokens are revoked
       const revoked = faker.datatype.boolean({ probability: 0.2 });
 
-      // Дата создания токена (от 1 до 60 дней назад)
+      // Issued 1 to 60 days ago
       const createdAt = faker.date.recent({ days: 60 });
 
       const refreshToken = await prisma.refreshTokens.create({

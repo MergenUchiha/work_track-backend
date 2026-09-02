@@ -2,24 +2,24 @@ import { IsString, IsOptional, MinLength, MaxLength, IsEmail } from 'class-valid
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
- * DTO для обновления профиля пользователя (сам пользователь)
+ * Fields a user may change on their own profile.
  */
 export class UpdateProfileDto {
   @ApiPropertyOptional({
     example: 'John Smith',
-    description: 'Новое имя пользователя',
+    description: 'New name',
   })
   @IsOptional()
   @IsString()
-  @MinLength(2, { message: 'Имя должно содержать минимум 2 символа' })
-  @MaxLength(255, { message: 'Имя не должно превышать 255 символов' })
+  @MinLength(2, { message: 'Name must be at least 2 characters' })
+  @MaxLength(255, { message: 'Name must not exceed 255 characters' })
   name?: string;
 
   @ApiPropertyOptional({
     example: 'newemail@example.com',
-    description: 'Новый email пользователя',
+    description: 'New email',
   })
   @IsOptional()
-  @IsEmail({}, { message: 'Некорректный формат email' })
+  @IsEmail({}, { message: 'Invalid email format' })
   email?: string;
 }

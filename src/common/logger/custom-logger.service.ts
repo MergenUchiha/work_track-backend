@@ -2,8 +2,7 @@ import { Injectable, LoggerService, Scope } from '@nestjs/common';
 import { createLogger, format, transports, Logger as WinstonLogger } from 'winston';
 
 /**
- * Custom Logger Service с поддержкой Winston
- * Предоставляет расширенные возможности логирования
+ * Application logger backed by Winston: console output plus rotating files.
  */
 @Injectable({ scope: Scope.TRANSIENT })
 export class CustomLoggerService implements LoggerService {
@@ -13,7 +12,6 @@ export class CustomLoggerService implements LoggerService {
   constructor(context?: string) {
     this.context = context;
 
-    // Конфигурация Winston logger
     this.logger = createLogger({
       level: process.env.LOG_LEVEL || 'info',
       format: format.combine(
@@ -24,7 +22,7 @@ export class CustomLoggerService implements LoggerService {
       ),
       defaultMeta: { service: 'worktrack-backend' },
       transports: [
-        // Консоль для всех уровней
+        // Console: everything
         new transports.Console({
           format: format.combine(
             format.colorize(),
@@ -36,44 +34,44 @@ export class CustomLoggerService implements LoggerService {
           ),
         }),
 
-        // Файл для ошибок
+        // File: errors only
         new transports.File({
           filename: 'logs/error.log',
           level: 'error',
           format: format.combine(format.timestamp(), format.json()),
         }),
 
-        // Файл для всех логов
+        // File: everything
         new transports.File({
           filename: 'logs/combined.log',
           format: format.combine(format.timestamp(), format.json()),
         }),
       ],
 
-      // Обработка необработанных исключений
+      // Uncaught exceptions
       exceptionHandlers: [new transports.File({ filename: 'logs/exceptions.log' })],
 
-      // Обработка необработанных промисов
+      // Unhandled promise rejections
       rejectionHandlers: [new transports.File({ filename: 'logs/rejections.log' })],
     });
   }
 
   /**
-   * Установить контекст для логгера
+   * Sets the context label used in log lines.
    */
   setContext(context: string) {
     this.context = context;
   }
 
   /**
-   * Логирование информационного сообщения
+   * Logs an informational message.
    */
   log(message: any, context?: string) {
     this.logger.info(message, { context: context || this.context });
   }
 
   /**
-   * Логирование ошибки
+   * Logs an error, optionally with a stack trace.
    */
   error(message: any, trace?: string, context?: string) {
     this.logger.error(message, {
@@ -83,35 +81,35 @@ export class CustomLoggerService implements LoggerService {
   }
 
   /**
-   * Логирование предупреждения
+   * Logs a warning.
    */
   warn(message: any, context?: string) {
     this.logger.warn(message, { context: context || this.context });
   }
 
   /**
-   * Логирование отладочной информации
+   * Logs a debug message.
    */
   debug(message: any, context?: string) {
     this.logger.debug(message, { context: context || this.context });
   }
 
   /**
-   * Логирование подробной информации
+   * Logs a verbose message.
    */
   verbose(message: any, context?: string) {
     this.logger.verbose(message, { context: context || this.context });
   }
 
   /**
-   * Логирование с произвольным уровнем
+   * Logs at an arbitrary level.
    */
   logWithLevel(level: string, message: any, meta?: any) {
     this.logger.log(level, message, { ...meta, context: this.context });
   }
 
   /**
-   * Создать child logger с дополнительным контекстом
+   * Creates a child logger with its own context.
    */
   child(meta: any): CustomLoggerService {
     const childLogger = new CustomLoggerService(this.context);

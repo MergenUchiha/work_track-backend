@@ -16,16 +16,14 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  /**
-   * Регистрация нового пользователя
-   */
+  /** Registers a new user and signs them in. */
   async register(dto: RegisterDto) {
     const existingUser = await this.prisma.users.findUnique({
       where: { email: dto.email },
     });
 
     if (existingUser) {
-      throw new ConflictException('Пользователь с таким email уже существует');
+      throw new ConflictException('A user with this email already exists');
     }
 
     const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS') || 10;
@@ -58,26 +56,24 @@ export class AuthService {
     };
   }
 
-  /**
-   * Вход пользователя
-   */
+  /** Authenticates a user by email and password. */
   async login(dto: LoginDto) {
     const user = await this.prisma.users.findUnique({
       where: { email: dto.email },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Неверный email или пароль');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Неверный email или пароль');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Аккаунт деактивирован');
+      throw new UnauthorizedException('Account is deactivated');
     }
 
     const tokens = await this.generateTokens(user.id, user.email, user.role);
@@ -96,9 +92,7 @@ export class AuthService {
     };
   }
 
-  /**
-   * Обновление токенов (refresh)
-   */
+  /** Rotates a refresh token: the old one is consumed, a new pair is issued. */
   async refresh(refreshToken: string) {
     let payload: any;
     try {
@@ -106,7 +100,7 @@ export class AuthService {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       });
     } catch (error) {
-      throw new UnauthorizedException('Недействительный refresh токен');
+      throw new UnauthorizedException('Invalid refresh token');
     }
 
     const tokenHash = this.hashToken(refreshToken);
@@ -119,15 +113,15 @@ export class AuthService {
     });
 
     if (!storedToken) {
-      throw new UnauthorizedException('Refresh токен не найден');
+      throw new UnauthorizedException('Refresh token not found');
     }
 
     if (storedToken.revoked) {
-      throw new UnauthorizedException('Refresh токен был отозван');
+      throw new UnauthorizedException('Refresh token has been revoked');
     }
 
     if (new Date() > storedToken.expiresAt) {
-      throw new UnauthorizedException('Срок действия refresh токена истёк');
+      throw new UnauthorizedException('Refresh token has expired');
     }
 
     const user = await this.prisma.users.findUnique({
@@ -135,7 +129,7 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Пользователь не найден или деактивирован');
+      throw new UnauthorizedException('User not found or deactivated');
     }
 
     await this.prisma.refreshTokens.delete({
@@ -147,9 +141,7 @@ export class AuthService {
     return tokens;
   }
 
-  /**
-   * Выход (logout)
-   */
+  /** Revokes a single refresh token. */
   async logout(refreshToken: string) {
     const tokenHash = this.hashToken(refreshToken);
 
@@ -163,26 +155,20 @@ export class AuthService {
       });
     }
 
-    return { message: 'Успешный выход из системы' };
+    return { message: 'Signed out successfully' };
   }
 
-  /**
-   * Отзыв всех refresh токенов пользователя
-   */
+  /** Revokes every refresh token belonging to a user. */
   async logoutAll(userId: string) {
     await this.prisma.refreshTokens.deleteMany({
       where: { userId },
     });
 
-    return { message: 'Все сессии завершены' };
+    return { message: 'All sessions have been ended' };
   }
 
   /**
-   * Генерация пары токенов (access + refresh)
-   *
-   * FIX: Использует корректные имена переменных из .env:
-   *   JWT_ACCESS_EXPIRES_IN (было: JWT_ACCESS_EXPIRATION)
-   *   JWT_REFRESH_EXPIRES_IN (было: JWT_REFRESH_EXPIRATION)
+   * Issues an access/refresh token pair and records the refresh token.
    */
   private async generateTokens(userId: string, email: string, role: UserRole) {
     const accessPayload = {
@@ -191,11 +177,10 @@ export class AuthService {
       role,
     };
 
-    // ✅ FIX: JWT_ACCESS_EXPIRES_IN (соответствует .env.example)
     const accessExpiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') || '15m';
     const accessToken = this.jwtService.sign(accessPayload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: accessExpiresIn as any,
+      expiresIn: accessExpiresIn,
     });
 
     const refreshPayload = {
@@ -203,19 +188,18 @@ export class AuthService {
       tokenId: crypto.randomUUID(),
     };
 
-    // ✅ FIX: JWT_REFRESH_EXPIRES_IN (соответствует .env.example)
     const refreshExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
     const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: refreshExpiresIn as any,
+      expiresIn: refreshExpiresIn,
     });
 
     const tokenHash = this.hashToken(refreshToken);
 
-    // ✅ FIX: Корректное вычисление даты истечения из JWT_REFRESH_EXPIRES_IN
-    const expiresAt = new Date();
-    const expirationDays = parseInt(refreshExpiresIn.replace('d', '') || '7');
-    expiresAt.setDate(expiresAt.getDate() + expirationDays);
+    // Read the expiry from the signed token rather than re-parsing the
+    // configured duration: any format jsonwebtoken accepts ("7d", "12h",
+    // "30m") stays in sync with the database row automatically.
+    const expiresAt = this.getTokenExpiry(refreshToken);
 
     await this.prisma.refreshTokens.create({
       data: {
@@ -229,6 +213,17 @@ export class AuthService {
       accessToken,
       refreshToken,
     };
+  }
+
+  /** Expiry of a signed JWT, taken from its own `exp` claim. */
+  private getTokenExpiry(token: string): Date {
+    const decoded = this.jwtService.decode(token) as { exp?: number } | null;
+
+    if (!decoded?.exp) {
+      throw new Error('Signed refresh token has no exp claim');
+    }
+
+    return new Date(decoded.exp * 1000);
   }
 
   private hashToken(token: string): string {

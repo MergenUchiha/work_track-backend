@@ -20,7 +20,7 @@ export class TasksHandler {
       const user = await this.botService.getOrCreateUser(ctx);
       ctx.user = user;
 
-      // Получаем заказы с учётом роли пользователя
+      // Role-aware listing: workers only see their own orders
       const result = await this.ordersService.findAll(
         {
           page: 1,
@@ -33,11 +33,11 @@ export class TasksHandler {
       );
 
       if (result.data.length === 0) {
-        await ctx.reply('📋 Заказов пока нет.');
+        await ctx.reply('📋 There are no orders yet.');
         return;
       }
 
-      const header = `📋 <b>Список заказов</b> (${result.meta.total} шт.)\n\n`;
+      const header = `📋 <b>Orders</b> (${result.meta.total})\n\n`;
 
       for (const order of result.data.slice(0, 5)) {
         const orderMessage = this.formatOrder(order);
@@ -51,30 +51,30 @@ export class TasksHandler {
 
       if (result.meta.total > 5) {
         await ctx.reply(
-          `\n<i>Показано 5 из ${result.meta.total} заказов.</i>\n` +
-            `Используйте веб-интерфейс для просмотра всех заказов.`,
+          `\n<i>Showing 5 of ${result.meta.total} orders.</i>\n` +
+            `Use the web interface to see all of them.`,
           { parse_mode: 'HTML' },
         );
       }
     } catch (error) {
       this.logger.error(`Error in /tasks handler: ${error.message}`, error.stack);
-      await ctx.reply('❌ Не удалось загрузить заказы. Попробуйте позже.');
+      await ctx.reply('❌ Could not load orders. Please try again later.');
     }
   }
 
   private formatOrder(order: any): string {
     const isOverdue = this.botService.isOverdue(order.deadline, order.status);
-    const overdueWarning = isOverdue ? '\n⚠️ <b>ПРОСРОЧЕН!</b>' : '';
+    const overdueWarning = isOverdue ? '\n⚠️ <b>OVERDUE</b>' : '';
 
     return `
 🔹 <b>${order.title}</b>
 ${order.description ? `\n${order.description.substring(0, 150)}${order.description.length > 150 ? '...' : ''}` : ''}
 
-📊 Статус: ${this.botService.formatStatus(order.status)}
-🎯 Приоритет: ${this.botService.formatPriority(order.priority)}
-👤 Создатель: ${order.createdBy.name}
-${order.assignedTo ? `👷 Исполнитель: ${order.assignedTo.name}` : '👷 Исполнитель: <i>не назначен</i>'}
-${order.deadline ? `⏰ Дедлайн: ${this.botService.formatDate(order.deadline)}${overdueWarning}` : ''}
+📊 Status: ${this.botService.formatStatus(order.status)}
+🎯 Priority: ${this.botService.formatPriority(order.priority)}
+👤 Created by: ${order.createdBy.name}
+${order.assignedTo ? `👷 Assignee: ${order.assignedTo.name}` : '👷 Assignee: <i>unassigned</i>'}
+${order.deadline ? `⏰ Deadline: ${this.botService.formatDate(order.deadline)}${overdueWarning}` : ''}
 
 <code>ID: ${order.id}</code>
     `.trim();
@@ -83,34 +83,33 @@ ${order.deadline ? `⏰ Дедлайн: ${this.botService.formatDate(order.deadl
   private createOrderKeyboard(order: any, userRole: string) {
     const buttons: ReturnType<typeof Markup.button.callback>[] = [];
 
-    // Кнопка "Взять в работу" (если заказ NEW и не назначен)
+    // Unassigned NEW orders can be picked up by managers
     if (order.status === 'NEW' && !order.assignedToId) {
       if (userRole === 'ADMIN' || userRole === 'MANAGER') {
-        buttons.push(Markup.button.callback('👍 Взять в работу', `take_${order.id}`));
+        buttons.push(Markup.button.callback('👍 Pick up', `take_${order.id}`));
       }
     }
 
-    // Кнопка "В работу" (если назначен на текущего пользователя и статус NEW)
+    // Assigned NEW orders can be started
     if (order.status === 'NEW' && order.assignedToId) {
-      buttons.push(Markup.button.callback('▶️ Начать работу', `start_${order.id}`));
+      buttons.push(Markup.button.callback('▶️ Start', `start_${order.id}`));
     }
 
-    // Кнопка "Завершить" (если в работе и исполнитель - текущий пользователь)
+    // Orders in progress can be completed
     if (order.status === 'IN_PROGRESS') {
-      buttons.push(Markup.button.callback('✅ Завершить', `complete_${order.id}`));
+      buttons.push(Markup.button.callback('✅ Complete', `complete_${order.id}`));
     }
 
-    // Кнопка "Отменить" (для админов и менеджеров)
+    // Managers may cancel anything that is not finished
     if (order.status !== 'DONE' && order.status !== 'CANCELLED') {
       if (userRole === 'ADMIN' || userRole === 'MANAGER') {
-        buttons.push(Markup.button.callback('❌ Отменить', `cancel_${order.id}`));
+        buttons.push(Markup.button.callback('❌ Cancel', `cancel_${order.id}`));
       }
     }
 
-    // Кнопка "Детали"
-    buttons.push(Markup.button.callback('ℹ️ Детали', `details_${order.id}`));
+    buttons.push(Markup.button.callback('ℹ️ Details', `details_${order.id}`));
 
-    // Группируем по 2 кнопки в ряд
+    // Two buttons per row
     const keyboard: ReturnType<typeof Markup.button.callback>[][] = [];
     for (let i = 0; i < buttons.length; i += 2) {
       keyboard.push(buttons.slice(i, i + 2));

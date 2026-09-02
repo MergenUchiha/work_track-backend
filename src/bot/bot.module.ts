@@ -17,14 +17,16 @@ export class BotModule {
   private static readonly logger = new Logger(BotModule.name);
 
   /**
-   * Создаёт динамический модуль с Telegram ботом
-   * Бот можно включить/выключить через TELEGRAM_BOT_ENABLED в .env
+   * Dynamic module for the Telegram bot.
+   *
+   * The bot is optional: with TELEGRAM_BOT_ENABLED unset or false the API
+   * runs without it and no Telegraf connection is opened.
    */
   static forRoot(): DynamicModule {
     const isBotEnabled = process.env.TELEGRAM_BOT_ENABLED === 'true';
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
-    // Проверяем флаг включения бота
+    // Feature flag
     if (!isBotEnabled) {
       this.logger.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       this.logger.warn('⚠️  TELEGRAM BOT IS DISABLED');
@@ -39,7 +41,7 @@ export class BotModule {
       };
     }
 
-    // Проверяем наличие токена
+    // A bot without a token cannot start
     if (!botToken || botToken === 'your-bot-token-here' || botToken.trim() === '') {
       this.logger.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       this.logger.error('❌ TELEGRAM BOT ERROR: Token not configured!');
@@ -61,7 +63,6 @@ export class BotModule {
     this.logger.log(`📱 Bot token: ${botToken.substring(0, 15)}...`);
     this.logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    // Возвращаем полноценный модуль с ботом
     return {
       module: BotModule,
       imports: [
@@ -83,7 +84,7 @@ export class BotModule {
               },
             };
 
-            // Webhook конфигурация (для продакшена)
+            // Webhook mode, used in production behind HTTPS
             if (useWebhook) {
               const domain = configService.get<string>('TELEGRAM_WEBHOOK_DOMAIN');
               const path = configService.get<string>('TELEGRAM_WEBHOOK_PATH', '/telegram-webhook');

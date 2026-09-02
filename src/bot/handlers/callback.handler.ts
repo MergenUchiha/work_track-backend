@@ -1,22 +1,31 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Action, Update, Ctx } from 'nestjs-telegraf';
+import { Action, Update, Ctx, On } from 'nestjs-telegraf';
 import { BotService } from '../bot.service';
 import { OrderStatus } from '@prisma/client';
 import { OrdersService } from 'src/modules/orders/orders.service';
+
+/** Minimum length accepted by CancelOrderDto. */
+const MIN_CANCEL_REASON_LENGTH = 10;
 
 @Update()
 @Injectable()
 export class CallbackHandler {
   private readonly logger = new Logger(CallbackHandler.name);
 
+  /**
+   * Telegram user id -> order awaiting a cancellation reason.
+   *
+   * In-memory on purpose: the state lives for one short exchange. A
+   * multi-instance deployment would need Redis here.
+   */
+  private readonly pendingCancellations = new Map<number, string>();
+
   constructor(
     private readonly botService: BotService,
     private readonly ordersService: OrdersService,
   ) {}
 
-  /**
-   * Взять заказ в работу (назначить себя)
-   */
+  /** Assigns the order to whoever pressed the button. */
   @Action(/^take_(.+)$/)
   async onTake(@Ctx() ctx: any) {
     try {
@@ -25,7 +34,6 @@ export class CallbackHandler {
       const orderId = ctx.match[1];
       const user = await this.botService.getOrCreateUser(ctx);
 
-      // Назначаем заказ на пользователя
       const order = await this.ordersService.assign(
         orderId,
         { assignedToId: user.id },
@@ -34,25 +42,23 @@ export class CallbackHandler {
       );
 
       await ctx.editMessageText(
-        `✅ <b>Заказ назначен на вас!</b>\n\n` +
+        `✅ <b>Order assigned to you</b>\n\n` +
           `🔹 <b>${order.title}</b>\n` +
-          `📊 Статус: ${this.botService.formatStatus(order.status)}\n\n` +
-          `Теперь вы можете начать работу над заказом.\n` +
-          `Используйте команду /my для просмотра.`,
+          `📊 Status: ${this.botService.formatStatus(order.status)}\n\n` +
+          `You can start working on it now.\n` +
+          `Use /my to see your orders.`,
         { parse_mode: 'HTML' },
       );
 
       this.logger.log(`User ${user.id} took order ${orderId}`);
     } catch (error) {
       this.logger.error(`Error in take action: ${error.message}`, error.stack);
-      await ctx.answerCbQuery('❌ Не удалось назначить заказ');
-      await ctx.reply('❌ ' + (error.message || 'Произошла ошибка'));
+      await ctx.answerCbQuery('❌ Could not assign the order');
+      await ctx.reply('❌ ' + (error.message || 'Something went wrong'));
     }
   }
 
-  /**
-   * Начать работу над заказом (изменить статус на IN_PROGRESS)
-   */
+  /** Moves the order to IN_PROGRESS. */
   @Action(/^start_(.+)$/)
   async onStart(@Ctx() ctx: any) {
     try {
@@ -69,24 +75,22 @@ export class CallbackHandler {
       );
 
       await ctx.editMessageText(
-        `⚙️ <b>Заказ взят в работу!</b>\n\n` +
+        `⚙️ <b>Order in progress</b>\n\n` +
           `🔹 <b>${order.title}</b>\n` +
-          `📊 Статус: ${this.botService.formatStatus(order.status)}\n\n` +
-          `Удачи в выполнении! 💪`,
+          `📊 Status: ${this.botService.formatStatus(order.status)}\n\n` +
+          `Good luck! 💪`,
         { parse_mode: 'HTML' },
       );
 
       this.logger.log(`User ${user.id} started order ${orderId}`);
     } catch (error) {
       this.logger.error(`Error in start action: ${error.message}`, error.stack);
-      await ctx.answerCbQuery('❌ Не удалось начать работу');
-      await ctx.reply('❌ ' + (error.message || 'Произошла ошибка'));
+      await ctx.answerCbQuery('❌ Could not start the order');
+      await ctx.reply('❌ ' + (error.message || 'Something went wrong'));
     }
   }
 
-  /**
-   * Завершить заказ (изменить статус на DONE)
-   */
+  /** Moves the order to DONE and notifies its creator. */
   @Action(/^complete_(.+)$/)
   async onComplete(@Ctx() ctx: any) {
     try {
@@ -103,19 +107,18 @@ export class CallbackHandler {
       );
 
       await ctx.editMessageText(
-        `✅ <b>Заказ завершён!</b>\n\n` +
+        `✅ <b>Order completed</b>\n\n` +
           `🔹 <b>${order.title}</b>\n` +
-          `📊 Статус: ${this.botService.formatStatus(order.status)}\n\n` +
-          `Отличная работа! 🎉`,
+          `📊 Status: ${this.botService.formatStatus(order.status)}\n\n` +
+          `Nice work! 🎉`,
         { parse_mode: 'HTML' },
       );
 
-      // Уведомляем создателя заказа
       if (order.createdBy.id !== user.id && order.createdBy.telegramId) {
         await this.botService.sendNotification(
           order.createdBy.id,
-          `✅ <b>Заказ завершён!</b>\n\n` +
-            `Пользователь ${user.name} завершил заказ:\n` +
+          `✅ <b>Order completed</b>\n\n` +
+            `${user.name} completed the order:\n` +
             `🔹 <b>${order.title}</b>`,
         );
       }
@@ -123,13 +126,14 @@ export class CallbackHandler {
       this.logger.log(`User ${user.id} completed order ${orderId}`);
     } catch (error) {
       this.logger.error(`Error in complete action: ${error.message}`, error.stack);
-      await ctx.answerCbQuery('❌ Не удалось завершить заказ');
-      await ctx.reply('❌ ' + (error.message || 'Произошла ошибка'));
+      await ctx.answerCbQuery('❌ Could not complete the order');
+      await ctx.reply('❌ ' + (error.message || 'Something went wrong'));
     }
   }
 
   /**
-   * Отменить заказ
+   * Starts the cancellation flow: the reason arrives in the next message,
+   * which onCancellationReason() below picks up.
    */
   @Action(/^cancel_(.+)$/)
   async onCancel(@Ctx() ctx: any) {
@@ -139,30 +143,79 @@ export class CallbackHandler {
       const orderId = ctx.match[1];
       const user = await this.botService.getOrCreateUser(ctx);
 
-      // Просим ввести причину отмены
+      this.pendingCancellations.set(ctx.from.id, orderId);
+
       await ctx.editMessageText(
-        '❌ <b>Отмена заказа</b>\n\n' +
-          'Введите причину отмены заказа:\n' +
-          '<i>(минимум 10 символов)</i>',
+        '❌ <b>Cancel order</b>\n\n' +
+          'Send the reason for cancelling:\n' +
+          `<i>(at least ${MIN_CANCEL_REASON_LENGTH} characters)</i>\n\n` +
+          'Send /cancel to abort.',
         { parse_mode: 'HTML' },
       );
-
-      // Сохраняем ID заказа в контексте для следующего сообщения
-      // Используем простую Map для хранения состояния
-      const cancelSessionKey = `cancel_${user.telegramId}_${orderId}`;
-      // В production используйте Redis или другое хранилище
-      (ctx as any).scene.state = { orderId, waitingForReason: true };
 
       this.logger.log(`User ${user.id} initiated cancel for order ${orderId}`);
     } catch (error) {
       this.logger.error(`Error in cancel action: ${error.message}`, error.stack);
-      await ctx.answerCbQuery('❌ Не удалось отменить заказ');
+      await ctx.answerCbQuery('❌ Could not cancel the order');
     }
   }
 
   /**
-   * Показать детали заказа
+   * Second half of the cancellation flow. Ignores every message that does
+   * not belong to a pending cancellation, so other text handlers still work.
    */
+  @On('text')
+  async onCancellationReason(@Ctx() ctx: any) {
+    const telegramId = ctx.from?.id;
+    const orderId = telegramId ? this.pendingCancellations.get(telegramId) : undefined;
+
+    if (!orderId) {
+      return;
+    }
+
+    const reason: string = ctx.message?.text ?? '';
+
+    if (reason.trim() === '/cancel') {
+      this.pendingCancellations.delete(telegramId);
+      await ctx.reply('ℹ️ Cancellation aborted, the order was left unchanged.');
+      return;
+    }
+
+    if (reason.trim().length < MIN_CANCEL_REASON_LENGTH) {
+      await ctx.reply(
+        `❌ The reason must be at least ${MIN_CANCEL_REASON_LENGTH} characters. Please try again.`,
+      );
+      return;
+    }
+
+    try {
+      const user = await this.botService.getOrCreateUser(ctx);
+      const order = await this.ordersService.cancel(
+        orderId,
+        { reason: reason.trim() },
+        user.id,
+        user.role,
+      );
+
+      this.pendingCancellations.delete(telegramId);
+
+      await ctx.reply(
+        `❌ <b>Order cancelled</b>\n\n` +
+          `🔹 <b>${order.title}</b>\n` +
+          `📊 Status: ${this.botService.formatStatus(order.status)}\n` +
+          `📝 Reason: ${reason.trim()}`,
+        { parse_mode: 'HTML' },
+      );
+
+      this.logger.log(`User ${user.id} cancelled order ${orderId}`);
+    } catch (error) {
+      this.pendingCancellations.delete(telegramId);
+      this.logger.error(`Failed to cancel order: ${error.message}`, error.stack);
+      await ctx.reply('❌ ' + (error.message || 'Could not cancel the order'));
+    }
+  }
+
+  /** Shows the full order card. */
   @Action(/^details_(.+)$/)
   async onDetails(@Ctx() ctx: any) {
     try {
@@ -174,26 +227,26 @@ export class CallbackHandler {
       const order = await this.ordersService.findOne(orderId, user.id, user.role);
 
       const isOverdue = this.botService.isOverdue(order.deadline, order.status);
-      const overdueWarning = isOverdue ? '\n⚠️ <b>ПРОСРОЧЕН!</b>' : '';
+      const overdueWarning = isOverdue ? '\n⚠️ <b>OVERDUE</b>' : '';
 
       const detailsMessage = `
-📄 <b>Детали заказа</b>
+📄 <b>Order details</b>
 
-<b>Название:</b>
+<b>Title:</b>
 ${order.title}
 
-<b>Описание:</b>
-${order.description || '<i>не указано</i>'}
+<b>Description:</b>
+${order.description || '<i>not provided</i>'}
 
-📊 <b>Статус:</b> ${this.botService.formatStatus(order.status)}
-🎯 <b>Приоритет:</b> ${this.botService.formatPriority(order.priority)}
-${order.deadline ? `⏰ <b>Дедлайн:</b> ${this.botService.formatDate(order.deadline)}${overdueWarning}` : ''}
+📊 <b>Status:</b> ${this.botService.formatStatus(order.status)}
+🎯 <b>Priority:</b> ${this.botService.formatPriority(order.priority)}
+${order.deadline ? `⏰ <b>Deadline:</b> ${this.botService.formatDate(order.deadline)}${overdueWarning}` : ''}
 
-👤 <b>Создатель:</b> ${order.createdBy.name} (${order.createdBy.email})
-${order.assignedTo ? `👷 <b>Исполнитель:</b> ${order.assignedTo.name} (${order.assignedTo.email})` : '👷 <b>Исполнитель:</b> <i>не назначен</i>'}
+👤 <b>Created by:</b> ${order.createdBy.name} (${order.createdBy.email})
+${order.assignedTo ? `👷 <b>Assignee:</b> ${order.assignedTo.name} (${order.assignedTo.email})` : '👷 <b>Assignee:</b> <i>unassigned</i>'}
 
-📅 <b>Создан:</b> ${this.botService.formatDate(order.createdAt)}
-📝 <b>Обновлён:</b> ${this.botService.formatDate(order.updatedAt)}
+📅 <b>Created:</b> ${this.botService.formatDate(order.createdAt)}
+📝 <b>Updated:</b> ${this.botService.formatDate(order.updatedAt)}
 
 <code>ID: ${order.id}</code>
       `.trim();
@@ -203,8 +256,8 @@ ${order.assignedTo ? `👷 <b>Исполнитель:</b> ${order.assignedTo.nam
       this.logger.log(`User ${user.id} viewed details of order ${orderId}`);
     } catch (error) {
       this.logger.error(`Error in details action: ${error.message}`, error.stack);
-      await ctx.answerCbQuery('❌ Не удалось загрузить детали');
-      await ctx.reply('❌ ' + (error.message || 'Произошла ошибка'));
+      await ctx.answerCbQuery('❌ Could not load the details');
+      await ctx.reply('❌ ' + (error.message || 'Something went wrong'));
     }
   }
 }

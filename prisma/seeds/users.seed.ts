@@ -5,7 +5,7 @@ import * as bcrypt from 'bcrypt';
 export async function seedUsers(prisma: PrismaClient) {
   const saltRounds = 10;
 
-  // Создаем фиксированных пользователей для тестирования
+  // Fixed accounts, so the seeded data always has known logins
   const fixedUsers = [
     {
       email: 'admin@example.com',
@@ -30,9 +30,8 @@ export async function seedUsers(prisma: PrismaClient) {
     },
   ];
 
-  const createdUsers:Users[] = [];
+  const createdUsers: Users[] = [];
 
-  // Создаем фиксированных пользователей
   for (const userData of fixedUsers) {
     const user = await prisma.users.create({
       data: {
@@ -47,7 +46,7 @@ export async function seedUsers(prisma: PrismaClient) {
     console.log(`  ✓ Created user: ${user.email} (${user.role})`);
   }
 
-  // Создаем случайных пользователей с помощью Faker
+  // Plus a batch of random users
   const randomUsersCount = 12;
   const roles = [UserRole.MANAGER, UserRole.WORKER];
 
@@ -63,7 +62,7 @@ export async function seedUsers(prisma: PrismaClient) {
         name: `${firstName} ${lastName}`,
         passwordHash: await bcrypt.hash('password123', saltRounds),
         role,
-        isActive: faker.datatype.boolean({ probability: 0.9 }), // 90% активны
+        isActive: faker.datatype.boolean({ probability: 0.9 }), // 90% are active
       },
     });
     createdUsers.push(user);

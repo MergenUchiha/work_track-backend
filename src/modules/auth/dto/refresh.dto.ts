@@ -4,9 +4,9 @@ import { ApiProperty } from '@nestjs/swagger';
 export class RefreshDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'Refresh токен для получения новой пары токенов',
+    description: 'Refresh token used to obtain a new token pair',
   })
   @IsString()
-  @IsNotEmpty({ message: 'Refresh токен обязателен' })
+  @IsNotEmpty({ message: 'Refresh token is required' })
   refreshToken: string;
 }

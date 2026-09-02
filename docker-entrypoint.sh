@@ -1,14 +1,14 @@
 #!/bin/sh
 # =============================================================
 # WorkTrack Backend — docker-entrypoint.sh
-# Запускается как CMD при старте контейнера.
-# Порядок: ждём БД → миграции → старт приложения
+# Runs as the container CMD.
+# Order: wait for the database -> apply migrations -> start the app
 # =============================================================
 
-set -e  # Останавливаемся при любой ошибке
+set -e  # abort on the first failure
 
 # ──────────────────────────────────────────────────────────────
-# Цвета для логов
+# Log colours
 # ──────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -20,17 +20,17 @@ log_warn()  { printf "${YELLOW}[ENTRYPOINT]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[ENTRYPOINT]${NC} %s\n" "$1"; }
 
 # ──────────────────────────────────────────────────────────────
-# 1. Ожидание готовности PostgreSQL
+# 1. Wait for PostgreSQL
 # ──────────────────────────────────────────────────────────────
 wait_for_db() {
     log_info "Waiting for PostgreSQL to be ready..."
 
-    # Извлекаем хост и порт из DATABASE_URL
-    # Формат: postgresql://user:pass@host:port/db
+    # Pull host and port out of DATABASE_URL
+    # Format: postgresql://user:pass@host:port/db
     DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:/]+).*|\1|')
     DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
 
-    # Дефолтный порт если не указан
+    # Fall back to the default port
     DB_PORT="${DB_PORT:-5432}"
 
     MAX_RETRIES=30
@@ -51,13 +51,12 @@ wait_for_db() {
 }
 
 # ──────────────────────────────────────────────────────────────
-# 2. Применение миграций (prisma migrate deploy)
+# 2. Apply migrations
 # ──────────────────────────────────────────────────────────────
 run_migrations() {
     log_info "Running database migrations..."
 
-    # FIX: Не используем --schema для prismaSchemaFolder
-    # Prisma автоматически найдёт схемы в prisma/schemas/
+    # No --schema flag: with prismaSchemaFolder Prisma finds prisma/schemas/ itself
     if node_modules/.bin/prisma migrate deploy; then
         log_info "Migrations applied successfully."
     else
@@ -67,11 +66,11 @@ run_migrations() {
 }
 
 # ──────────────────────────────────────────────────────────────
-# 3. Запуск приложения
+# 3. Start the application
 # ──────────────────────────────────────────────────────────────
 start_app() {
     log_info "Starting WorkTrack Backend (NODE_ENV=${NODE_ENV:-production})..."
-    # exec заменяет shell-процесс Node.js → правильный PID для сигналов
+    # exec replaces the shell, so Node receives signals directly
     exec node dist/main.js
 }
 

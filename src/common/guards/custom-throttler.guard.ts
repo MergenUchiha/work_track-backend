@@ -3,7 +3,8 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { ExecutionContext } from '@nestjs/common';
 
 /**
- * Custom Throttler Guard с поддержкой пропуска для определенных пользователей
+ * Throttler guard that exempts admins and health checks, and tracks
+ * authenticated callers by user id instead of IP.
  */
 @Injectable()
 export class CustomThrottlerGuard extends ThrottlerGuard {
@@ -11,12 +12,12 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    // Пропускаем rate limiting для администраторов
+    // Admins are not rate limited
     if (user && user.role === 'ADMIN') {
       return true;
     }
 
-    // Пропускаем для health check эндпоинтов
+    // Health probes must never be throttled
     const url = request.url;
     if (url.includes('/health') || url.includes('/metrics')) {
       return true;
@@ -26,12 +27,12 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
   }
 
   protected getTracker(req: Record<string, any>): Promise<string> {
-    // Трекаем по user ID если пользователь авторизован
+    // Track authenticated callers by user id
     if (req.user?.sub) {
       return Promise.resolve(`user-${req.user.sub}`);
     }
 
-    // Иначе трекаем по IP
+    // Fall back to the client IP
     return Promise.resolve(req.ip || req.socket.remoteAddress);
   }
 }

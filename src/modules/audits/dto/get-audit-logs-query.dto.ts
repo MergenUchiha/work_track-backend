@@ -5,7 +5,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 export class GetAuditLogsQueryDto {
   @ApiPropertyOptional({
     example: 1,
-    description: 'Номер страницы',
+    description: 'Page number',
     minimum: 1,
     default: 1,
   })
@@ -17,7 +17,7 @@ export class GetAuditLogsQueryDto {
 
   @ApiPropertyOptional({
     example: 10,
-    description: 'Количество элементов на странице',
+    description: 'Items per page',
     minimum: 1,
     default: 10,
   })
@@ -29,7 +29,7 @@ export class GetAuditLogsQueryDto {
 
   @ApiPropertyOptional({
     example: '660e8400-e29b-41d4-a716-446655440001',
-    description: 'Фильтр по заказу',
+    description: 'Filter by order',
   })
   @IsOptional()
   @IsUUID('4')
@@ -37,7 +37,7 @@ export class GetAuditLogsQueryDto {
 
   @ApiPropertyOptional({
     example: '550e8400-e29b-41d4-a716-446655440003',
-    description: 'Фильтр по пользователю, выполнившему действие',
+    description: 'Filter by acting user',
   })
   @IsOptional()
   @IsUUID('4')
@@ -45,7 +45,7 @@ export class GetAuditLogsQueryDto {
 
   @ApiPropertyOptional({
     example: 'STATUS_CHANGED',
-    description: 'Фильтр по типу действия',
+    description: 'Filter by action type',
   })
   @IsOptional()
   @IsString()
@@ -53,7 +53,7 @@ export class GetAuditLogsQueryDto {
 
   @ApiPropertyOptional({
     example: '2024-01-01',
-    description: 'Логи после этой даты',
+    description: 'Entries on or after this date',
   })
   @IsOptional()
   @IsDateString()
@@ -61,7 +61,7 @@ export class GetAuditLogsQueryDto {
 
   @ApiPropertyOptional({
     example: '2024-12-31',
-    description: 'Логи до этой даты',
+    description: 'Entries on or before this date',
   })
   @IsOptional()
   @IsDateString()
@@ -69,7 +69,7 @@ export class GetAuditLogsQueryDto {
 
   @ApiPropertyOptional({
     example: 'createdAt',
-    description: 'Поле для сортировки',
+    description: 'Field to sort by',
     enum: ['createdAt', 'action'],
     default: 'createdAt',
   })
@@ -79,7 +79,7 @@ export class GetAuditLogsQueryDto {
 
   @ApiPropertyOptional({
     example: 'desc',
-    description: 'Направление сортировки',
+    description: 'Sort direction',
     enum: ['asc', 'desc'],
     default: 'desc',
   })
@@ -90,7 +90,7 @@ export class GetAuditLogsQueryDto {
 export class PaginatedAuditLogsDto {
   @ApiPropertyOptional({
     type: [Object],
-    description: 'Список аудит логов',
+    description: 'Audit log entries',
   })
   data: any[];
 
@@ -101,7 +101,7 @@ export class PaginatedAuditLogsDto {
       limit: 10,
       totalPages: 10,
     },
-    description: 'Метаданные пагинации',
+    description: 'Pagination metadata',
   })
   meta: {
     total: number;

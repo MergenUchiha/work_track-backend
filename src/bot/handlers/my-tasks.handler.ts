@@ -20,7 +20,7 @@ export class MyTasksHandler {
       const user = await this.botService.getOrCreateUser(ctx);
       ctx.user = user;
 
-      // Получаем заказы, где пользователь - создатель или исполнитель
+      // Orders the user created, and orders assigned to them
       const [createdResult, assignedResult] = await Promise.all([
         this.ordersService.findAll(
           {
@@ -52,57 +52,53 @@ export class MyTasksHandler {
 
       if (total === 0) {
         await ctx.reply(
-          '📝 У вас пока нет заказов.\n\n' +
+          '📝 You have no orders yet.\n\n' +
             (user.role === 'ADMIN' || user.role === 'MANAGER'
-              ? 'Используйте /create для создания нового заказа.'
-              : 'Администратор или менеджер назначит вам заказ.'),
+              ? 'Use /create to create one.'
+              : 'An administrator or manager will assign one to you.'),
         );
         return;
       }
 
-      // Формируем сообщение
-      let message = '📝 <b>Мои заказы</b>\n\n';
+      let message = '📝 <b>My orders</b>\n\n';
 
       if (totalCreated > 0) {
-        message += `📤 <b>Созданные мной:</b> ${totalCreated} шт.\n`;
+        message += `📤 <b>Created by me:</b> ${totalCreated}\n`;
       }
 
       if (totalAssigned > 0) {
-        message += `👷 <b>Назначены мне:</b> ${totalAssigned} шт.\n`;
+        message += `👷 <b>Assigned to me:</b> ${totalAssigned}\n`;
       }
 
       await ctx.reply(message, { parse_mode: 'HTML' });
 
-      // Показываем созданные заказы
       if (createdResult.data.length > 0) {
-        await ctx.reply('📤 <b>Созданные мной:</b>', { parse_mode: 'HTML' });
+        await ctx.reply('📤 <b>Created by me:</b>', { parse_mode: 'HTML' });
         for (const order of createdResult.data) {
           await this.sendOrderMessage(ctx, order, user.role);
         }
       }
 
-      // Показываем назначенные заказы
       if (assignedResult.data.length > 0) {
-        await ctx.reply('👷 <b>Назначены мне:</b>', { parse_mode: 'HTML' });
+        await ctx.reply('👷 <b>Assigned to me:</b>', { parse_mode: 'HTML' });
         for (const order of assignedResult.data) {
           await this.sendOrderMessage(ctx, order, user.role);
         }
       }
 
-      // Статистика
       const stats = await this.ordersService.getStats(user.id, user.role);
       const statsMessage =
-        '\n📊 <b>Статистика:</b>\n' +
-        `• Всего: ${stats.total}\n` +
-        `• Просрочено: ${stats.overdue}\n` +
-        `• Новых: ${stats.byStatus.find((s) => s.status === 'NEW')?.count || 0}\n` +
-        `• В работе: ${stats.byStatus.find((s) => s.status === 'IN_PROGRESS')?.count || 0}\n` +
-        `• Завершено: ${stats.byStatus.find((s) => s.status === 'DONE')?.count || 0}`;
+        '\n📊 <b>Statistics:</b>\n' +
+        `• Total: ${stats.total}\n` +
+        `• Overdue: ${stats.overdue}\n` +
+        `• New: ${stats.byStatus.find((s) => s.status === 'NEW')?.count || 0}\n` +
+        `• In progress: ${stats.byStatus.find((s) => s.status === 'IN_PROGRESS')?.count || 0}\n` +
+        `• Done: ${stats.byStatus.find((s) => s.status === 'DONE')?.count || 0}`;
 
       await ctx.reply(statsMessage, { parse_mode: 'HTML' });
     } catch (error) {
       this.logger.error(`Error in /my handler: ${error.message}`, error.stack);
-      await ctx.reply('❌ Не удалось загрузить ваши заказы.');
+      await ctx.reply('❌ Could not load your orders.');
     }
   }
 
@@ -114,20 +110,20 @@ export class MyTasksHandler {
       const stats = await this.ordersService.getStats(user.id, user.role);
 
       const profileMessage = `
-👤 <b>Ваш профиль</b>
+👤 <b>Your profile</b>
 
-<b>Имя:</b> ${user.name}
+<b>Name:</b> ${user.name}
 <b>Email:</b> ${user.email}
-<b>Роль:</b> ${this.botService.formatRole(user.role)}
-<b>Статус:</b> ${user.isActive ? '✅ Активен' : '❌ Заблокирован'}
+<b>Role:</b> ${this.botService.formatRole(user.role)}
+<b>Status:</b> ${user.isActive ? '✅ Active' : '❌ Blocked'}
 
-📊 <b>Статистика заказов:</b>
-• Всего: ${stats.total}
-• Просрочено: ${stats.overdue}
-• Новых: ${stats.byStatus.find((s) => s.status === 'NEW')?.count || 0}
-• В работе: ${stats.byStatus.find((s) => s.status === 'IN_PROGRESS')?.count || 0}
-• Завершено: ${stats.byStatus.find((s) => s.status === 'DONE')?.count || 0}
-• Отменено: ${stats.byStatus.find((s) => s.status === 'CANCELLED')?.count || 0}
+📊 <b>Order statistics:</b>
+• Total: ${stats.total}
+• Overdue: ${stats.overdue}
+• New: ${stats.byStatus.find((s) => s.status === 'NEW')?.count || 0}
+• In progress: ${stats.byStatus.find((s) => s.status === 'IN_PROGRESS')?.count || 0}
+• Done: ${stats.byStatus.find((s) => s.status === 'DONE')?.count || 0}
+• Cancelled: ${stats.byStatus.find((s) => s.status === 'CANCELLED')?.count || 0}
 
 <code>User ID: ${user.id}</code>
 <code>Telegram ID: ${user.telegramId}</code>
@@ -136,7 +132,7 @@ export class MyTasksHandler {
       await ctx.reply(profileMessage, { parse_mode: 'HTML' });
     } catch (error) {
       this.logger.error(`Error in /profile handler: ${error.message}`, error.stack);
-      await ctx.reply('❌ Не удалось загрузить профиль.');
+      await ctx.reply('❌ Could not load your profile.');
     }
   }
 
@@ -147,37 +143,37 @@ export class MyTasksHandler {
       const stats = await this.ordersService.getStats(user.id, user.role);
 
       const statsMessage = `
-📊 <b>Статистика заказов</b>
+📊 <b>Order statistics</b>
 
-<b>Общая информация:</b>
-• Всего заказов: ${stats.total}
-• Просроченных: ${stats.overdue} ⚠️
+<b>Overview:</b>
+• Total orders: ${stats.total}
+• Overdue: ${stats.overdue} ⚠️
 
-<b>По статусам:</b>
+<b>By status:</b>
 ${stats.byStatus.map((s) => `• ${this.botService.formatStatus(s.status)}: ${s.count}`).join('\n')}
 
-<b>По приоритетам:</b>
+<b>By priority:</b>
 ${stats.byPriority.map((p) => `• ${this.botService.formatPriority(p.priority)}: ${p.count}`).join('\n')}
       `.trim();
 
       await ctx.reply(statsMessage, { parse_mode: 'HTML' });
     } catch (error) {
       this.logger.error(`Error in /stats handler: ${error.message}`, error.stack);
-      await ctx.reply('❌ Не удалось загрузить статистику.');
+      await ctx.reply('❌ Could not load statistics.');
     }
   }
 
   private async sendOrderMessage(ctx: BotContext, order: any, userRole: string) {
     const isOverdue = this.botService.isOverdue(order.deadline, order.status);
-    const overdueWarning = isOverdue ? '\n⚠️ <b>ПРОСРОЧЕН!</b>' : '';
+    const overdueWarning = isOverdue ? '\n⚠️ <b>OVERDUE</b>' : '';
 
     const message = `
 🔹 <b>${order.title}</b>
 
-📊 Статус: ${this.botService.formatStatus(order.status)}
-🎯 Приоритет: ${this.botService.formatPriority(order.priority)}
-${order.assignedTo ? `👷 Исполнитель: ${order.assignedTo.name}` : '👷 Исполнитель: <i>не назначен</i>'}
-${order.deadline ? `⏰ Дедлайн: ${this.botService.formatDate(order.deadline)}${overdueWarning}` : ''}
+📊 Status: ${this.botService.formatStatus(order.status)}
+🎯 Priority: ${this.botService.formatPriority(order.priority)}
+${order.assignedTo ? `👷 Assignee: ${order.assignedTo.name}` : '👷 Assignee: <i>unassigned</i>'}
+${order.deadline ? `⏰ Deadline: ${this.botService.formatDate(order.deadline)}${overdueWarning}` : ''}
 
 <code>ID: ${order.id}</code>
     `.trim();
@@ -193,27 +189,23 @@ ${order.deadline ? `⏰ Дедлайн: ${this.botService.formatDate(order.deadl
   private createOrderKeyboard(order: any, userRole: string) {
     const buttons: ReturnType<typeof Markup.button.callback>[] = [];
 
-    // Кнопка "Начать работу"
     if (order.status === 'NEW' && order.assignedToId) {
-      buttons.push(Markup.button.callback('▶️ Начать', `start_${order.id}`));
+      buttons.push(Markup.button.callback('▶️ Start', `start_${order.id}`));
     }
 
-    // Кнопка "Завершить"
     if (order.status === 'IN_PROGRESS') {
-      buttons.push(Markup.button.callback('✅ Завершить', `complete_${order.id}`));
+      buttons.push(Markup.button.callback('✅ Complete', `complete_${order.id}`));
     }
 
-    // Кнопка "Отменить"
     if (order.status !== 'DONE' && order.status !== 'CANCELLED') {
       if (userRole === 'ADMIN' || userRole === 'MANAGER') {
-        buttons.push(Markup.button.callback('❌ Отменить', `cancel_${order.id}`));
+        buttons.push(Markup.button.callback('❌ Cancel', `cancel_${order.id}`));
       }
     }
 
-    // Кнопка "Детали"
-    buttons.push(Markup.button.callback('ℹ️ Детали', `details_${order.id}`));
+    buttons.push(Markup.button.callback('ℹ️ Details', `details_${order.id}`));
 
-    // Группируем по 2 кнопки в ряд
+    // Two buttons per row
     const keyboard: ReturnType<typeof Markup.button.callback>[][] = [];
     for (let i = 0; i < buttons.length; i += 2) {
       keyboard.push(buttons.slice(i, i + 2));

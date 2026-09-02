@@ -10,14 +10,14 @@ async function main() {
   console.log('🌱 Starting database seeding...');
 
   try {
-    // Очищаем данные в правильном порядке (учитывая зависимости)
+    // Delete in dependency order to satisfy foreign keys
     console.log('🧹 Cleaning existing data...');
     await prisma.orderAuditLogs.deleteMany();
     await prisma.refreshTokens.deleteMany();
     await prisma.orders.deleteMany();
     await prisma.users.deleteMany();
 
-    // Заполняем данные
+    // Seed
     console.log('👥 Seeding users...');
     const users = await seedUsers(prisma);
 

@@ -15,7 +15,7 @@ import { CancelOrderDto } from './dto/cancel-order.dto';
 import { GetOrdersQueryDto } from './dto/get-orders-query.dto';
 
 /**
- * Finite State Machine (FSM) для переходов между статусами
+ * Allowed order status transitions.
  */
 const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.NEW]: [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
@@ -32,11 +32,11 @@ export class OrdersService {
   ) {}
 
   /**
-   * Создать новый заказ
+   * Creates an order. Admins and managers only.
    */
   async create(dto: CreateOrderDto, createdById: string, userRole: string) {
     if (userRole !== UserRole.ADMIN && userRole !== UserRole.MANAGER) {
-      throw new ForbiddenException('Только администраторы и менеджеры могут создавать заказы');
+      throw new ForbiddenException('Only admins and managers can create orders');
     }
 
     if (dto.assignedToId) {
@@ -75,18 +75,11 @@ export class OrdersService {
   }
 
   /**
-   * Получить список заказов с фильтрацией и пагинацией
+   * Lists orders with filtering, search and pagination.
    *
-   * FIX: Исправлен баг перезаписи where.OR.
-   * Ранее при одновременном использовании:
-   *   - фильтра по роли WORKER (where.OR = [{createdById}, {assignedToId}])
-   *   - параметра search (where.OR = [{title}, {description}])
-   * второй where.OR полностью перезаписывал первый, и работник видел чужие заказы.
-   * Теперь оба условия объединяются через where.AND.
-   *
-   * FIX: Исправлен баг конфликта overdue + status.
-   * Ранее overdue устанавливал where.status = {notIn: [...]}, что перезаписывало
-   * явный фильтр по status из query params. Теперь фильтры объединяются.
+   * Role and search conditions are collected into a single AND array:
+   * assigning them to `where.OR` separately used to overwrite one another,
+   * which let a worker see orders belonging to other people.
    */
   async findAll(query: GetOrdersQueryDto, userId: string, userRole: string) {
     const {
@@ -107,7 +100,7 @@ export class OrdersService {
 
     const andConditions: Prisma.OrdersWhereInput[] = [];
 
-    // ✅ FIX: Фильтр для WORKER — добавляем в AND, не перезаписываем OR
+    // Workers only see orders they created or are assigned to
     if (userRole === UserRole.WORKER) {
       andConditions.push({
         OR: [{ createdById: userId }, { assignedToId: userId }],
@@ -126,14 +119,14 @@ export class OrdersService {
       andConditions.push({ createdById });
     }
 
-    // assignedToId и unassigned взаимоисключающие — unassigned имеет приоритет
+    // assignedToId and unassigned are mutually exclusive; unassigned wins
     if (unassigned) {
       andConditions.push({ assignedToId: null });
     } else if (assignedToId) {
       andConditions.push({ assignedToId });
     }
 
-    // ✅ FIX: search добавляем в AND, не перезаписываем OR
+    // Free-text search across title and description
     if (search) {
       andConditions.push({
         OR: [
@@ -150,10 +143,10 @@ export class OrdersService {
       andConditions.push({ deadline: deadlineFilter });
     }
 
-    // ✅ FIX: overdue — добавляем отдельные условия в AND, не перезаписываем status
+    // `overdue` must not clobber an explicit status filter
     if (overdue) {
       andConditions.push({ deadline: { lt: new Date() } });
-      // Только если не задан явный status фильтр
+      // Only when no explicit status filter was given
       if (!status) {
         andConditions.push({
           status: { notIn: [OrderStatus.DONE, OrderStatus.CANCELLED] },
@@ -192,7 +185,7 @@ export class OrdersService {
   }
 
   /**
-   * Получить заказ по ID
+   * Returns an order by id, subject to role rules.
    */
   async findOne(id: string, userId: string, userRole: string) {
     const order = await this.prisma.orders.findUnique({
@@ -208,7 +201,7 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException('Заказ не найден');
+      throw new NotFoundException('Order not found');
     }
 
     this.checkAccessPermission(order, userId, userRole);
@@ -217,7 +210,7 @@ export class OrdersService {
   }
 
   /**
-   * Обновить заказ
+   * Updates an order.
    */
   async update(id: string, dto: UpdateOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
@@ -227,11 +220,11 @@ export class OrdersService {
       userRole !== UserRole.MANAGER &&
       order.createdBy.id !== userId
     ) {
-      throw new ForbiddenException('Недостаточно прав для обновления заказа');
+      throw new ForbiddenException('Insufficient permissions to update this order');
     }
 
     if ([OrderStatus.DONE, OrderStatus.CANCELLED].includes(order.status)) {
-      throw new BadRequestException('Нельзя обновлять завершённые или отменённые заказы');
+      throw new BadRequestException('Completed or cancelled orders cannot be updated');
     }
 
     const oldValues = {
@@ -278,21 +271,17 @@ export class OrdersService {
   }
 
   /**
-   * Назначить/снять исполнителя
+   * Assigns or unassigns a worker. Admins and managers only.
    */
   async assign(id: string, dto: AssignOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
 
     if (userRole !== UserRole.ADMIN && userRole !== UserRole.MANAGER) {
-      throw new ForbiddenException(
-        'Только администраторы и менеджеры могут назначать исполнителей',
-      );
+      throw new ForbiddenException('Only admins and managers can assign workers');
     }
 
     if ([OrderStatus.DONE, OrderStatus.CANCELLED].includes(order.status)) {
-      throw new BadRequestException(
-        'Нельзя назначать исполнителя на завершённые или отменённые заказы',
-      );
+      throw new BadRequestException('Completed or cancelled orders cannot be reassigned');
     }
 
     if (dto.assignedToId) {
@@ -324,7 +313,7 @@ export class OrdersService {
   }
 
   /**
-   * Изменить статус заказа (FSM)
+   * Moves an order to a new status, guarded by the state machine.
    */
   async changeStatus(id: string, dto: ChangeStatusDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
@@ -332,8 +321,8 @@ export class OrdersService {
     const allowedTransitions = STATUS_TRANSITIONS[order.status];
     if (!allowedTransitions.includes(dto.status)) {
       throw new BadRequestException(
-        `Невозможно изменить статус с "${order.status}" на "${dto.status}". ` +
-          `Допустимые переходы: ${allowedTransitions.join(', ') || 'нет'}`,
+        `Cannot change status from "${order.status}" to "${dto.status}". ` +
+          `Allowed transitions: ${allowedTransitions.join(', ') || 'none'}`,
       );
     }
 
@@ -344,7 +333,7 @@ export class OrdersService {
       userRole !== UserRole.MANAGER
     ) {
       throw new ForbiddenException(
-        'Только назначенный исполнитель или менеджер может изменить статус на IN_PROGRESS или DONE',
+        'Only the assignee or a manager can move an order to IN_PROGRESS or DONE',
       );
     }
 
@@ -373,7 +362,7 @@ export class OrdersService {
   }
 
   /**
-   * Отменить заказ с указанием причины
+   * Cancels an order and records the reason.
    */
   async cancel(id: string, dto: CancelOrderDto, userId: string, userRole: string) {
     const order = await this.findOne(id, userId, userRole);
@@ -383,12 +372,12 @@ export class OrdersService {
       userRole !== UserRole.MANAGER &&
       order.createdBy.id !== userId
     ) {
-      throw new ForbiddenException('Недостаточно прав для отмены заказа');
+      throw new ForbiddenException('Insufficient permissions to cancel this order');
     }
 
     const allowedTransitions = STATUS_TRANSITIONS[order.status];
     if (!allowedTransitions.includes(OrderStatus.CANCELLED)) {
-      throw new BadRequestException(`Невозможно отменить заказ в статусе "${order.status}"`);
+      throw new BadRequestException(`An order in status "${order.status}" cannot be cancelled`);
     }
 
     const updatedOrder = await this.prisma.orders.update({
@@ -416,21 +405,21 @@ export class OrdersService {
   }
 
   /**
-   * Удалить заказ (только админ)
+   * Deletes an order. Admin only.
    */
   async remove(id: string, userId: string, userRole: string) {
     if (userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('Только администраторы могут удалять заказы');
+      throw new ForbiddenException('Only admins can delete orders');
     }
 
     await this.findOne(id, userId, userRole);
     await this.prisma.orders.delete({ where: { id } });
 
-    return { message: 'Заказ успешно удалён' };
+    return { message: 'Order deleted successfully' };
   }
 
   /**
-   * Получить статистику по заказам
+   * Aggregate order statistics.
    */
   async getStats(userId: string, userRole: string) {
     const where: Prisma.OrdersWhereInput = {};
@@ -461,7 +450,7 @@ export class OrdersService {
   }
 
   // ============================================================
-  // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+  // HELPERS
   // ============================================================
 
   private checkAccessPermission(order: any, userId: string, userRole: string) {
@@ -472,7 +461,7 @@ export class OrdersService {
     const hasAccess = order.createdById === userId || order.assignedToId === userId;
 
     if (!hasAccess) {
-      throw new ForbiddenException('Недостаточно прав для просмотра этого заказа');
+      throw new ForbiddenException('Insufficient permissions to view this order');
     }
   }
 
@@ -482,11 +471,11 @@ export class OrdersService {
     });
 
     if (!user) {
-      throw new NotFoundException('Пользователь не найден');
+      throw new NotFoundException('User not found');
     }
 
     if (!user.isActive) {
-      throw new BadRequestException('Нельзя назначить деактивированного пользователя');
+      throw new BadRequestException('A deactivated user cannot be assigned');
     }
 
     return user;

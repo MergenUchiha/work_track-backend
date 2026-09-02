@@ -25,7 +25,7 @@ export class BotService {
   ) {}
 
   /**
-   * Получить или создать пользователя по Telegram ID
+   * Looks up the user behind a Telegram account, creating one on first contact.
    */
   async getOrCreateUser(ctx: BotContext) {
     const telegramUser = ctx.from;
@@ -35,7 +35,6 @@ export class BotService {
 
     const telegramId = BigInt(telegramUser.id);
 
-    // Ищем существующего пользователя
     let user = await this.prisma.users.findUnique({
       where: { telegramId },
       select: {
@@ -48,7 +47,7 @@ export class BotService {
       },
     });
 
-    // Если пользователь не найден - создаём
+    // First contact: provision an account
     if (!user) {
       this.logger.log(`Creating new user for Telegram ID: ${telegramUser.id}`);
 
@@ -57,7 +56,7 @@ export class BotService {
       const displayName =
         telegramUser.first_name + (telegramUser.last_name ? ` ${telegramUser.last_name}` : '');
 
-      // Генерируем случайный пароль (пользователь всё равно войдёт через бота)
+      // Random password: this account is only ever used through the bot
       const randomPassword = crypto.randomBytes(32).toString('hex');
       const bcrypt = await import('bcrypt');
       const passwordHash = await bcrypt.hash(randomPassword, 10);
@@ -67,7 +66,7 @@ export class BotService {
           email,
           name: displayName,
           passwordHash,
-          role: UserRole.WORKER, // По умолчанию WORKER
+          role: UserRole.WORKER,
           isActive: true,
           telegramId,
         },
@@ -84,16 +83,15 @@ export class BotService {
       this.logger.log(`Created user ${user.id} for Telegram user @${username}`);
     }
 
-    // Проверяем активность
     if (!user.isActive) {
-      throw new Error('Ваш аккаунт деактивирован. Обратитесь к администратору.');
+      throw new Error('Your account is deactivated. Please contact an administrator.');
     }
 
     return user;
   }
 
   /**
-   * Middleware для автоматической проверки пользователя
+   * Middleware that resolves the current user before a handler runs.
    */
   async attachUser(ctx: BotContext, next: () => Promise<void>) {
     try {
@@ -102,12 +100,12 @@ export class BotService {
       await next();
     } catch (error) {
       this.logger.error(`Failed to attach user: ${error.message}`, error.stack);
-      await ctx.reply(`❌ Ошибка: ${error.message}`);
+      await ctx.reply(`❌ Error: ${error.message}`);
     }
   }
 
   /**
-   * Отправить уведомление пользователю
+   * Sends a message to a user over Telegram, if they linked an account.
    */
   async sendNotification(userId: string, message: string) {
     try {
@@ -133,47 +131,47 @@ export class BotService {
   }
 
   /**
-   * Форматировать роль для отображения
+   * Human-readable role label.
    */
   formatRole(role: UserRole): string {
     const roleMap = {
-      [UserRole.ADMIN]: '👑 Администратор',
-      [UserRole.MANAGER]: '👨‍💼 Менеджер',
-      [UserRole.WORKER]: '👷 Работник',
+      [UserRole.ADMIN]: '👑 Administrator',
+      [UserRole.MANAGER]: '👨‍💼 Manager',
+      [UserRole.WORKER]: '👷 Worker',
     };
     return roleMap[role] || role;
   }
 
   /**
-   * Форматировать статус заказа
+   * Human-readable order status.
    */
   formatStatus(status: string): string {
     const statusMap = {
-      NEW: '🆕 Новый',
-      IN_PROGRESS: '⚙️ В работе',
-      DONE: '✅ Завершён',
-      CANCELLED: '❌ Отменён',
+      NEW: '🆕 New',
+      IN_PROGRESS: '⚙️ In progress',
+      DONE: '✅ Done',
+      CANCELLED: '❌ Cancelled',
     };
     return statusMap[status] || status;
   }
 
   /**
-   * Форматировать приоритет
+   * Human-readable priority.
    */
   formatPriority(priority: string): string {
     const priorityMap = {
-      LOW: '🟢 Низкий',
-      MEDIUM: '🟡 Средний',
-      HIGH: '🔴 Высокий',
+      LOW: '🟢 Low',
+      MEDIUM: '🟡 Medium',
+      HIGH: '🔴 High',
     };
     return priorityMap[priority] || priority;
   }
 
   /**
-   * Форматировать дату
+   * Formats a date for display in bot messages.
    */
   formatDate(date: Date): string {
-    return new Intl.DateTimeFormat('ru-RU', {
+    return new Intl.DateTimeFormat('en-GB', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -183,7 +181,7 @@ export class BotService {
   }
 
   /**
-   * Проверить просрочен ли заказ
+   * True when the deadline has passed and the order is still open.
    */
   isOverdue(deadline: Date | null, status: string): boolean {
     if (!deadline) return false;

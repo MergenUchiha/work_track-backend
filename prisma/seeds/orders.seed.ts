@@ -2,65 +2,63 @@ import { PrismaClient, OrderStatus, OrderPriority, Users, Orders } from '@prisma
 import { faker } from '@faker-js/faker';
 
 export async function seedOrders(prisma: PrismaClient, users: Users[]) {
-  const createdOrders:Orders[] = [];
+  const createdOrders: Orders[] = [];
   const ordersCount = 50;
 
   const statuses = Object.values(OrderStatus);
   const priorities = Object.values(OrderPriority);
 
-  // Фильтруем пользователей по ролям
+  // Split users by role
   const managers = users.filter((u) => u.role === 'MANAGER' || u.role === 'ADMIN');
   const workers = users.filter((u) => u.role === 'WORKER');
 
   const orderTitleTemplates = [
-    'Разработка модуля {feature}',
-    'Исправление бага в {module}',
-    'Оптимизация {component}',
-    'Рефакторинг {system}',
-    'Внедрение {technology}',
-    'Создание документации для {feature}',
-    'Тестирование {module}',
-    'Интеграция с {service}',
-    'Настройка {infrastructure}',
-    'Миграция {data}',
+    'Build the {feature} module',
+    'Fix a bug in the {module}',
+    'Optimise the {component}',
+    'Refactor the {system}',
+    'Adopt {technology}',
+    'Document the {feature}',
+    'Test the {module}',
+    'Integrate with {service}',
+    'Set up {infrastructure}',
+    'Migrate {data}',
   ];
 
   const features = [
-    'аутентификации',
-    'авторизации',
-    'отчетности',
-    'уведомлений',
-    'платежей',
-    'поиска',
-    'фильтрации',
-    'экспорта данных',
-    'импорта данных',
+    'authentication',
+    'authorisation',
+    'reporting',
+    'notifications',
+    'payments',
+    'search',
+    'filtering',
+    'data export',
+    'data import',
     'dashboard',
   ];
 
   const modules = [
-    'API заказов',
-    'системе логирования',
-    'базе данных',
-    'пользовательском интерфейсе',
-    'мобильном приложении',
-    'админ-панели',
-    'модуле безопасности',
-    'системе кэширования',
+    'orders API',
+    'logging system',
+    'database',
+    'user interface',
+    'mobile app',
+    'admin panel',
+    'security module',
+    'caching layer',
   ];
 
   for (let i = 0; i < ordersCount; i++) {
     const status = faker.helpers.arrayElement(statuses);
     const priority = faker.helpers.arrayElement(priorities);
     const creator = faker.helpers.arrayElement(managers);
-    
-    // 70% заказов назначены кому-то
-    const shouldAssign = faker.datatype.boolean({ probability: 0.7 });
-    const assignedTo = shouldAssign && workers.length > 0
-      ? faker.helpers.arrayElement(workers)
-      : null;
 
-    // Генерируем заголовок
+    // 70% of orders have an assignee
+    const shouldAssign = faker.datatype.boolean({ probability: 0.7 });
+    const assignedTo =
+      shouldAssign && workers.length > 0 ? faker.helpers.arrayElement(workers) : null;
+
     const template = faker.helpers.arrayElement(orderTitleTemplates);
     const feature = faker.helpers.arrayElement(features);
     const module = faker.helpers.arrayElement(modules);
@@ -74,16 +72,16 @@ export async function seedOrders(prisma: PrismaClient, users: Users[]) {
       .replace('{infrastructure}', feature)
       .replace('{data}', module);
 
-    // Генерируем дедлайн (80% заказов имеют дедлайн)
+    // 80% of orders have a deadline
     const hasDeadline = faker.datatype.boolean({ probability: 0.8 });
     const deadline = hasDeadline
       ? faker.date.between({
           from: new Date(),
-          to: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // +90 дней
+          to: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // +90 days
         })
       : null;
 
-    // Генерируем даты создания (за последние 60 дней)
+    // Spread creation dates over the last 60 days
     const createdAt = faker.date.recent({ days: 60 });
 
     const order = await prisma.orders.create({

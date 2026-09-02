@@ -3,11 +3,11 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class CancelOrderDto {
   @ApiProperty({
-    example: 'Заказчик отменил требования, работа больше не актуальна',
-    description: 'Причина отмены заказа',
+    example: 'Requirements withdrawn by the client, the work is no longer needed',
+    description: 'Cancellation reason',
     minLength: 10,
   })
   @IsString()
-  @MinLength(10, { message: 'Причина отмены должна содержать минимум 10 символов' })
+  @MinLength(10, { message: 'Cancellation reason must be at least 10 characters' })
   reason: string;
 }

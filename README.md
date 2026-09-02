@@ -1,37 +1,40 @@
 # WorkTrack Backend API
 
-Система управления заказами и задачами с поддержкой ролей, FSM-статусов и аудита действий.
+Order and task management service with role-based access, state-machine-guarded status transitions and a full audit trail.
 
 [![NestJS](https://img.shields.io/badge/NestJS-10.x-E0234E?logo=nestjs)](https://nestjs.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-5.x-2D3748?logo=prisma)](https://www.prisma.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)](https://www.postgresql.org/)
-[![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?logo=swagger)](http://localhost:3000/api/docs)
+[![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?logo=swagger)](https://swagger.io/)
 
 ---
 
-## Содержание
+## Contents
 
-- [Архитектура](#архитектура)
-- [Стек технологий](#стек-технологий)
-- [Структура проекта](#структура-проекта)
-- [Быстрый старт](#быстрый-старт)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Project structure](#project-structure)
+- [Getting started](#getting-started)
 - [Docker](#docker)
-- [Переменные окружения](#переменные-окружения)
-- [База данных](#база-данных)
-- [API Reference](#api-reference)
-- [Аутентификация](#аутентификация)
-- [Система ролей (RBAC)](#система-ролей-rbac)
-- [FSM статусов заказов](#fsm-статусов-заказов)
-- [Rate Limiting](#rate-limiting)
-- [Тестирование](#тестирование)
-- [Примеры запросов](#примеры-запросов)
+- [Environment variables](#environment-variables)
+- [Database](#database)
+- [API reference](#api-reference)
+- [Authentication](#authentication)
+- [Roles (RBAC)](#roles-rbac)
+- [Order status machine](#order-status-machine)
+- [Rate limiting](#rate-limiting)
+- [Telegram bot](#telegram-bot)
+- [Testing](#testing)
+- [Request examples](#request-examples)
+- [Response format](#response-format)
+- [Audit actions](#audit-actions)
 
 ---
 
-## Архитектура
+## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Client (HTTP)                           │
 └─────────────────────────────────┬───────────────────────────────┘
@@ -40,112 +43,120 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                    NestJS Application                           │
 │                                                                 │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │  Middleware  │  │   Guards     │  │    Interceptors      │  │
-│  │             │  │              │  │                      │  │
-│  │ RequestId   │  │ JwtAuthGuard │  │ LoggingInterceptor   │  │
-│  │ AuditMw     │  │ RolesGuard   │  │ TransformInterceptor │  │
-│  └──────┬──────┘  │ ThrottlerGrd │  └──────────────────────┘  │
-│         │         └──────────────┘                             │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────┐    │
+│  │ Middleware  │  │   Guards     │  │    Interceptors      │    │
+│  │             │  │              │  │                      │    │
+│  │ RequestId   │  │ JwtAuthGuard │  │ LoggingInterceptor   │    │
+│  │ AuditMw     │  │ RolesGuard   │  │ TransformInterceptor │    │
+│  └──────┬──────┘  │ ThrottlerGrd │  └──────────────────────┘    │
+│         │         └──────────────┘                              │
 │         ▼                                                       │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                      Controllers                         │  │
-│  │  AuthController  UsersController  OrdersController       │  │
-│  │  AuditsController  HealthController                      │  │
-│  └──────────────────────┬───────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                      Controllers                         │   │
+│  │  AuthController  UsersController  OrdersController       │   │
+│  │  AuditsController  HealthController                      │   │
+│  └──────────────────────┬───────────────────────────────────┘   │
 │                         │                                       │
 │                         ▼                                       │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                       Services                           │  │
-│  │  AuthService   UsersService   OrdersService              │  │
-│  │  AuditsService                                           │  │
-│  └──────────────────────┬───────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                       Services                           │   │
+│  │  AuthService   UsersService   OrdersService              │   │
+│  │  AuditsService                                           │   │
+│  └──────────────────────┬───────────────────────────────────┘   │
 │                         │                                       │
 │                         ▼                                       │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                   PrismaService                          │  │
-│  │              (Database Abstraction Layer)                │  │
-│  └──────────────────────┬───────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                   PrismaService                          │   │
+│  │              (database abstraction layer)                │   │
+│  └──────────────────────┬───────────────────────────────────┘   │
 └─────────────────────────┼───────────────────────────────────────┘
                           │
                           ▼
            ┌──────────────────────────┐
            │      PostgreSQL DB       │
-           │                         │
-           │  users                  │
-           │  orders                 │
-           │  refresh_tokens         │
-           │  order_audit_logs       │
+           │                          │
+           │  users                   │
+           │  orders                  │
+           │  refresh_tokens          │
+           │  order_audit_logs        │
            └──────────────────────────┘
 ```
 
-### Принципы архитектуры
+### Design notes
 
-**Модульная структура** — каждая функциональная область (`auth`, `users`, `orders`, `audits`) инкапсулирована в отдельный NestJS модуль со своими контроллером, сервисом и DTO.
+**Modular structure** — each area (`auth`, `users`, `orders`, `audits`) is a self-contained NestJS module with its own controller, service and DTOs.
 
-**Слои безопасности** — запрос последовательно проходит через Middleware (RequestId, Audit) → Guards (JWT, Roles, Throttler) → Interceptors (Logging, Transform) → Controller → Service → Database.
+**Layered request handling** — a request passes through middleware (request id, audit) → guards (JWT, roles, throttler) → interceptors (logging, transform) → controller → service → database.
 
-**FSM для статусов** — переходы между статусами заказов контролируются конечным автоматом, что исключает невалидные переходы на уровне бизнес-логики.
+**State machine for statuses** — order transitions are validated against an explicit table, so invalid transitions are rejected in the domain layer rather than relying on callers to behave.
 
-**Audit trail** — все изменения заказов записываются в `order_audit_logs` с сохранением старого и нового значения, пользователя и временной метки.
+**Audit trail** — every order change is written to `order_audit_logs` with the old value, the new value, the acting user and a timestamp.
 
-**RBAC** — ролевая модель (ADMIN / MANAGER / WORKER) реализована через комбинацию `JwtAuthGuard` + `RolesGuard` + декоратор `@Roles()`.
+**RBAC** — the ADMIN / MANAGER / WORKER model is enforced by `JwtAuthGuard` + `RolesGuard` + the `@Roles()` decorator.
 
----
-
-## Стек технологий
-
-| Компонент | Технология | Версия |
-|---|---|---|
-| Framework | NestJS | 10.x |
-| Language | TypeScript | 5.x |
-| ORM | Prisma | 5.x |
-| Database | PostgreSQL | 16 |
-| Auth | JWT (passport-jwt) | — |
-| Validation | class-validator | 0.14.x |
-| Documentation | Swagger / OpenAPI | 7.x |
-| Logging | Winston | 3.x |
-| Security | Helmet, Throttler | — |
-| Testing | Jest | 29.x |
-| Container | Docker + docker-compose | — |
+**Fail-fast configuration** — environment variables are validated at startup (`src/config/env.validation.ts`); a missing secret stops the process with a readable message.
 
 ---
 
-## Структура проекта
+## Tech stack
 
-```
+| Component     | Technology              | Version |
+| ------------- | ----------------------- | ------- |
+| Framework     | NestJS                  | 10.x    |
+| Language      | TypeScript              | 5.x     |
+| ORM           | Prisma                  | 5.x     |
+| Database      | PostgreSQL              | 16      |
+| Auth          | JWT (passport-jwt)      | —       |
+| Validation    | class-validator         | 0.14.x  |
+| Documentation | Swagger / OpenAPI       | 7.x     |
+| Logging       | Winston                 | 3.x     |
+| Security      | Helmet, Throttler       | —       |
+| Bot           | Telegraf (optional)     | 4.x     |
+| Testing       | Jest                    | 29.x    |
+| Container     | Docker + docker compose | —       |
+
+---
+
+## Project structure
+
+```text
 worktrack-backend/
 ├── prisma/
-│   ├── schemas/              # Prisma схемы (разделены по сущностям)
-│   │   ├── schema.prisma     # Datasource, generator, enums
+│   ├── schemas/              # Prisma schema, split per entity
+│   │   ├── schema.prisma     # datasource, generator, enums
 │   │   ├── user.prisma
 │   │   ├── orders.prisma
 │   │   ├── refreshToken.prisma
 │   │   └── orderAuditLogs.prisma
-│   ├── migrations/           # SQL миграции
-│   ├── seeds/                # Seed-скрипты (faker + фиксированные пользователи)
+│   ├── migrations/           # SQL migrations (committed on purpose)
+│   ├── seeds/                # seed scripts (faker + fixed accounts)
 │   └── seed.ts
 │
 ├── src/
-│   ├── app.module.ts         # Корневой модуль
-│   ├── main.ts               # Bootstrap + Helmet, CORS, Swagger, ValidationPipe
+│   ├── app.module.ts         # root module
+│   ├── main.ts               # bootstrap: Helmet, CORS, Swagger, validation
+│   │
+│   ├── config/
+│   │   └── env.validation.ts # startup validation of environment variables
 │   │
 │   ├── common/
-│   │   ├── config/           # throttler.config, cors.config, helmet.config
+│   │   ├── config/           # throttler, cors, helmet
 │   │   ├── decorators/       # ThrottleCustom, SkipThrottle
 │   │   ├── filters/          # AllExceptionsFilter (HTTP + Prisma errors)
 │   │   ├── guards/           # CustomThrottlerGuard
-│   │   ├── health/           # HealthController, HealthModule (/terminus)
-│   │   ├── interceptors/     # LoggingInterceptor, TransformInterceptor
+│   │   ├── health/           # health endpoints (Terminus)
+│   │   ├── interceptors/     # logging, response envelope
 │   │   ├── logger/           # CustomLoggerService (Winston)
 │   │   └── middleware/       # RequestIdMiddleware
 │   │
+│   ├── bot/                  # optional Telegram bot (Telegraf)
+│   │
 │   └── modules/
-│       ├── auth/             # Регистрация, логин, refresh, logout, JWT-стратегии
-│       ├── users/            # CRUD пользователей, смена роли, блокировка
-│       ├── orders/           # CRUD заказов, FSM статусов, назначение
-│       ├── audits/           # Лог изменений, статистика, очистка
-│       └── prisma/           # PrismaService (глобальный модуль)
+│       ├── auth/             # register, login, refresh, logout, JWT strategies
+│       ├── users/            # user CRUD, role changes, blocking
+│       ├── orders/           # order CRUD, status machine, assignment
+│       ├── audits/           # change log, statistics, cleanup
+│       └── prisma/           # PrismaService (global module)
 │
 ├── test/
 │   └── jest-e2e.json
@@ -153,45 +164,47 @@ worktrack-backend/
 ├── .env.example
 ├── docker-compose.yml
 ├── Dockerfile
+├── docker-entrypoint.sh
 └── package.json
 ```
 
 ---
 
-## Быстрый старт
+## Getting started
 
-### Предварительные требования
+### Requirements
 
 - Node.js 20+
 - PostgreSQL 16+
 - npm 10+
 
-### Установка
+### Setup
 
 ```bash
-# 1. Клонировать репозиторий
-git clone <repo-url>
-cd worktrack-backend
+# 1. Clone
+git clone https://github.com/MergenUchiha/work_track-backend.git
+cd work_track-backend
 
-# 2. Установить зависимости
-npm install
+# 2. Install dependencies
+npm ci
 
-# 3. Настроить переменные окружения
+# 3. Configure the environment
 cp .env.example .env
-# Отредактировать .env, указав параметры БД и секреты
+# edit .env: database credentials and JWT secrets
 
-# 4. Применить миграции и сгенерировать Prisma Client
+# 4. Apply migrations and generate the Prisma client
 npm run prisma:migrate
 npm run prisma:generate
 
-# 5. (Опционально) Заполнить БД тестовыми данными
+# 5. Optional: fill the database with demo data
 npm run prisma:seed
 
-# 6. Запустить приложение
+# 6. Run
 npm run start:dev
 ```
 
-Приложение будет доступно:
+Once running:
+
 - API: `http://localhost:3000/api`
 - Swagger UI: `http://localhost:3000/api/docs`
 - Health check: `http://localhost:3000/health`
@@ -200,23 +213,29 @@ npm run start:dev
 
 ## Docker
 
-### Запуск через docker-compose (рекомендуется)
+### Full stack with docker compose
 
 ```bash
-# Запустить всё окружение (PostgreSQL + приложение)
-docker-compose up -d
+# PostgreSQL + application
+docker compose up -d
 
-# Посмотреть логи
-docker-compose logs -f app
+# Follow the application logs
+docker compose logs -f app
 
-# Остановить
-docker-compose down
+# Stop
+docker compose down
 
-# Остановить и удалить данные БД
-docker-compose down -v
+# Stop and delete the database volume
+docker compose down -v
 ```
 
-### Только приложение (с внешней БД)
+`POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` have no defaults: compose refuses to start rather than bringing production up with a password published in this repository.
+
+The database port is bound to `127.0.0.1`. Remove the mapping entirely when deploying.
+
+Migrations run from `docker-entrypoint.sh` before the application starts.
+
+### Application only, against an external database
 
 ```bash
 docker build -t worktrack-backend .
@@ -225,46 +244,42 @@ docker run -p 3000:3000 --env-file .env worktrack-backend
 
 ---
 
-## Переменные окружения
+## Environment variables
 
-Скопируйте `.env.example` в `.env` и заполните значения:
+Copy `.env.example` to `.env` and fill it in. Every variable is validated at startup — see [`src/config/env.validation.ts`](src/config/env.validation.ts).
 
-```env
-# Приложение
-ENVIRONMENT=development     # development | production | test
-PORT=3000
+| Variable                                       | Required | Description                                                     |
+| ---------------------------------------------- | -------- | --------------------------------------------------------------- |
+| `NODE_ENV`                                     | no       | `development` \| `production` \| `test`                          |
+| `PORT`                                         | no       | HTTP port, default 3000                                          |
+| `SWAGGER_ENABLED`                              | no       | Forces the docs on or off. Unset: on in dev, off in production   |
+| `DATABASE_URL`                                 | **yes**  | PostgreSQL connection string                                     |
+| `JWT_ACCESS_SECRET`                            | **yes**  | At least 32 characters                                           |
+| `JWT_REFRESH_SECRET`                           | **yes**  | At least 32 characters, different from the access secret         |
+| `JWT_ACCESS_EXPIRES_IN`                        | no       | Access token lifetime, default `15m`                             |
+| `JWT_REFRESH_EXPIRES_IN`                       | no       | Refresh token lifetime, default `7d`                             |
+| `BCRYPT_ROUNDS`                                | no       | Cost factor, 10–15, default 10                                   |
+| `CORS_ORIGINS`                                 | no       | Comma-separated list of allowed origins                          |
+| `LOG_LEVEL`                                    | no       | `error` \| `warn` \| `info` \| `debug` \| `verbose`              |
+| `TELEGRAM_BOT_ENABLED`                         | no       | Enables the bot, default false                                   |
+| `TELEGRAM_BOT_TOKEN`                           | if bot   | Required when the bot is enabled                                 |
+| `TELEGRAM_USE_WEBHOOK`, `TELEGRAM_WEBHOOK_*`   | no       | Webhook mode instead of long polling                             |
 
-# База данных
-DATABASE_URL=postgresql://user:password@localhost:5432/worktrack
+Durations accept any format `jsonwebtoken` understands: `15m`, `12h`, `7d`.
 
-# JWT — Access Token
-JWT_ACCESS_SECRET=your-super-secret-access-key-min-32-chars
-JWT_ACCESS_EXPIRES_IN=15m          # Срок действия Access Token
+Generate a secret with:
 
-# JWT — Refresh Token
-JWT_REFRESH_SECRET=your-super-secret-refresh-key-min-32-chars
-JWT_REFRESH_EXPIRES_IN=7d          # Срок действия Refresh Token (в днях: 7d, 30d)
-
-# (Опционально) Bcrypt rounds (default: 10)
-BCRYPT_ROUNDS=10
-
-# (Опционально) CORS origins через запятую
-CORS_ORIGINS=http://localhost:3001,https://yourdomain.com
-
-# (Опционально) Уровень логирования
-LOG_LEVEL=info                     # error | warn | info | debug | verbose
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
-
-> **Важно:** `JWT_ACCESS_EXPIRES_IN` и `JWT_REFRESH_EXPIRES_IN` — именно такие имена переменных.  
-> Используйте форматы `15m`, `1h` для минут/часов; `7d`, `30d` — для дней.
 
 ---
 
-## База данных
+## Database
 
-### Схема
+### Schema
 
-```
+```text
 users
   id            UUID PK
   email         VARCHAR(255) UNIQUE
@@ -272,24 +287,25 @@ users
   password_hash VARCHAR(255)
   role          user_role (ADMIN | MANAGER | WORKER)
   is_active     BOOLEAN DEFAULT true
+  telegram_id   BIGINT? UNIQUE
   created_at    TIMESTAMPTZ
   updated_at    TIMESTAMPTZ
 
 orders
-  id            UUID PK
-  title         VARCHAR(255)
-  description   TEXT?
-  status        order_status (NEW | IN_PROGRESS | DONE | CANCELLED)
-  priority      order_priority (LOW | MEDIUM | HIGH)
-  deadline      TIMESTAMPTZ?
-  created_at    TIMESTAMPTZ
-  updated_at    TIMESTAMPTZ
-  created_by_id UUID FK → users
+  id             UUID PK
+  title          VARCHAR(255)
+  description    TEXT?
+  status         order_status (NEW | IN_PROGRESS | DONE | CANCELLED)
+  priority       order_priority (LOW | MEDIUM | HIGH)
+  deadline       TIMESTAMPTZ?
+  created_at     TIMESTAMPTZ
+  updated_at     TIMESTAMPTZ
+  created_by_id  UUID FK → users
   assigned_to_id UUID? FK → users
 
 refresh_tokens
   id            UUID PK
-  token_hash    VARCHAR(255)     -- SHA-256 хеш, не raw токен
+  token_hash    VARCHAR(255)     -- SHA-256 hash, never the raw token
   expires_at    TIMESTAMPTZ
   revoked       BOOLEAN DEFAULT false
   created_at    TIMESTAMPTZ
@@ -297,7 +313,7 @@ refresh_tokens
 
 order_audit_logs
   id            UUID PK
-  action        VARCHAR(100)     -- ORDER_CREATED, STATUS_CHANGED, etc.
+  action        VARCHAR(100)     -- ORDER_CREATED, STATUS_CHANGED, ...
   old_value     JSONB?
   new_value     JSONB?
   created_at    TIMESTAMPTZ
@@ -305,147 +321,143 @@ order_audit_logs
   changed_by_id UUID FK → users
 ```
 
-### Команды Prisma
+### Prisma commands
 
 ```bash
-# Создать новую миграцию
-npm run prisma:migrate
-
-# Применить миграции (продакшен)
-npm run prisma:deploy
-
-# Сгенерировать Prisma Client
-npm run prisma:generate
-
-# Заполнить БД тестовыми данными
-npm run prisma:seed
+npm run prisma:migrate    # create and apply a migration (development)
+npm run prisma:deploy     # apply migrations (production)
+npm run prisma:generate   # generate the Prisma client
+npm run prisma:seed       # seed demo data
+npm run prisma:studio     # open Prisma Studio
 ```
 
-### Тестовые пользователи (после seed)
+### Seeded accounts
 
-| Email | Пароль | Роль |
-|---|---|---|
-| admin@example.com | admin123 | ADMIN |
+| Email               | Password   | Role    |
+| ------------------- | ---------- | ------- |
+| admin@example.com   | admin123   | ADMIN   |
 | manager@example.com | manager123 | MANAGER |
-| worker@example.com | worker123 | WORKER |
+| worker@example.com  | worker123  | WORKER  |
+
+These exist only in seed data — never deploy them.
 
 ---
 
-## API Reference
+## API reference
 
-Полная интерактивная документация доступна в Swagger UI: `http://localhost:3000/api/docs`
+Interactive documentation lives in Swagger UI at `/api/docs`.
 
-### Endpoints
+### Authentication — `/api/auth`
 
-#### Authentication — `/api/auth`
+| Method | Path          | Description                     | Auth |
+| ------ | ------------- | ------------------------------- | ---- |
+| POST   | `/register`   | Register (always role WORKER)   | —    |
+| POST   | `/login`      | Sign in, returns a token pair   | —    |
+| POST   | `/refresh`    | Rotate the token pair           | —    |
+| POST   | `/logout`     | Revoke one refresh token        | —    |
+| POST   | `/logout-all` | End every session               | JWT  |
+| GET    | `/profile`    | Profile from the JWT payload    | JWT  |
 
-| Метод | Путь | Описание | Авторизация |
-|---|---|---|---|
-| POST | `/register` | Регистрация (роль: WORKER) | Нет |
-| POST | `/login` | Вход, получение токенов | Нет |
-| POST | `/refresh` | Обновление токенов | Нет |
-| POST | `/logout` | Выход (отзыв refresh токена) | Нет |
-| POST | `/logout-all` | Завершить все сессии | JWT |
-| GET | `/profile` | Профиль из JWT payload | JWT |
+### Users — `/api/users`
 
-#### Users — `/api/users`
+| Method | Path               | Description                    | Roles                            |
+| ------ | ------------------ | ------------------------------ | -------------------------------- |
+| GET    | `/profile`         | Own profile from the database  | any                              |
+| PUT    | `/profile`         | Update own profile             | any                              |
+| GET    | `/`                | List users, paginated          | ADMIN, MANAGER                   |
+| GET    | `/:id`             | User by id                     | ADMIN, MANAGER, or the user      |
+| PATCH  | `/:id/role`        | Change a role                  | ADMIN                            |
+| PATCH  | `/:id/active`      | Block or unblock               | ADMIN                            |
+| GET    | `/stats/overview`  | User statistics                | ADMIN                            |
+| DELETE | `/:id`             | Soft delete (deactivate)       | ADMIN                            |
 
-| Метод | Путь | Описание | Роли |
-|---|---|---|---|
-| GET | `/profile` | Свой профиль из БД | Все |
-| PUT | `/profile` | Обновить свой профиль | Все |
-| GET | `/` | Список пользователей + пагинация | ADMIN, MANAGER |
-| GET | `/:id` | Пользователь по ID | ADMIN, MANAGER (или сам пользователь) |
-| PATCH | `/:id/role` | Сменить роль | ADMIN |
-| PATCH | `/:id/active` | Заблокировать / разблокировать | ADMIN |
-| GET | `/stats/overview` | Статистика пользователей | ADMIN |
-| DELETE | `/:id` | Мягкое удаление (деактивация) | ADMIN |
+### Orders — `/api/orders`
 
-#### Orders — `/api/orders`
+| Method | Path              | Description                        | Roles                         |
+| ------ | ----------------- | ---------------------------------- | ----------------------------- |
+| POST   | `/`               | Create an order                    | ADMIN, MANAGER                |
+| GET    | `/`               | List with filters and pagination   | any (workers see their own)   |
+| GET    | `/stats/overview` | Order statistics                   | any (workers see their own)   |
+| GET    | `/:id`            | Order by id                        | any (workers see their own)   |
+| PUT    | `/:id`            | Update an order                    | ADMIN, MANAGER, creator       |
+| PATCH  | `/:id/assign`     | Assign or unassign a worker        | ADMIN, MANAGER                |
+| PATCH  | `/:id/status`     | Change status (state machine)      | role-dependent                |
+| POST   | `/:id/cancel`     | Cancel with a reason               | ADMIN, MANAGER, creator       |
+| DELETE | `/:id`            | Delete an order                    | ADMIN                         |
 
-| Метод | Путь | Описание | Роли |
-|---|---|---|---|
-| POST | `/` | Создать заказ | ADMIN, MANAGER |
-| GET | `/` | Список заказов + фильтры + пагинация | Все (WORKER — только свои) |
-| GET | `/stats/overview` | Статистика заказов | Все (WORKER — только свои) |
-| GET | `/:id` | Заказ по ID | Все (WORKER — только свои) |
-| PUT | `/:id` | Обновить заказ | ADMIN, MANAGER, создатель |
-| PATCH | `/:id/assign` | Назначить / снять исполнителя | ADMIN, MANAGER |
-| PATCH | `/:id/status` | Изменить статус (FSM) | По ролям |
-| POST | `/:id/cancel` | Отменить заказ с причиной | ADMIN, MANAGER, создатель |
-| DELETE | `/:id` | Удалить заказ | ADMIN |
+### Audit — `/api/audit`
 
-#### Audit — `/api/audit`
+| Method | Path                                | Description                | Roles          |
+| ------ | ----------------------------------- | -------------------------- | -------------- |
+| GET    | `/logs`                             | All entries, filterable    | ADMIN          |
+| GET    | `/logs/order/:orderId`              | Entries for one order      | ADMIN, MANAGER |
+| GET    | `/logs/user/:userId`                | Entries for one user       | ADMIN          |
+| GET    | `/logs/my-activity`                 | Your own activity          | any            |
+| GET    | `/logs/recent`                      | Most recent actions        | ADMIN, MANAGER |
+| GET    | `/logs/order/:orderId/field/:field` | History of a single field  | ADMIN, MANAGER |
+| GET    | `/stats`                            | Action statistics          | ADMIN          |
+| DELETE | `/logs/cleanup`                     | Drop entries past retention| ADMIN          |
 
-| Метод | Путь | Описание | Роли |
-|---|---|---|---|
-| GET | `/logs` | Все логи + фильтры + пагинация | ADMIN |
-| GET | `/logs/order/:orderId` | Логи по заказу | ADMIN, MANAGER |
-| GET | `/logs/user/:userId` | Логи по пользователю | ADMIN |
-| GET | `/logs/my-activity` | Моя активность | Все |
-| GET | `/logs/recent` | Последние N действий | ADMIN, MANAGER |
-| GET | `/logs/order/:orderId/field/:field` | История изменений поля | ADMIN, MANAGER |
-| GET | `/stats` | Статистика действий | ADMIN |
-| DELETE | `/logs/cleanup` | Удалить старые логи | ADMIN |
+### Health — `/health`
 
-#### Health — `/health`
+| Method | Path                | Description                        |
+| ------ | ------------------- | ---------------------------------- |
+| GET    | `/health`           | Database, memory and disk checks   |
+| GET    | `/health/live`      | Liveness probe                     |
+| GET    | `/health/ready`     | Readiness probe (database only)    |
+| GET    | `/health/detailed`  | Detailed report                    |
 
-| Метод | Путь | Описание |
-|---|---|---|
-| GET | `/health` | Полная проверка (DB, память, диск) |
-| GET | `/health/live` | Liveness probe |
-| GET | `/health/ready` | Readiness probe (только DB) |
-| GET | `/health/detailed` | Детальная проверка |
+Health endpoints are exempt from rate limiting and are served outside the `/api` prefix.
 
 ---
 
-## Аутентификация
+## Authentication
 
-API использует **JWT Bearer Token** аутентификацию с двумя токенами:
+Two tokens, deliberately different in lifetime and storage:
 
-- **Access Token** — короткоживущий (15 мин), передаётся в `Authorization: Bearer <token>` заголовке
-- **Refresh Token** — долгоживущий (7 дней), используется для получения новой пары токенов, хранится в БД как SHA-256 хеш (one-time use)
+- **Access token** — short-lived (15 minutes by default), sent as `Authorization: Bearer <token>`.
+- **Refresh token** — long-lived (7 days by default), single use. Only its SHA-256 hash is stored, so a database leak does not hand over usable sessions.
 
-### Поток аутентификации
+Rotating a refresh token deletes the old row. Blocking a user revokes every refresh token they hold.
 
+```text
+1. POST /api/auth/login    → { accessToken, refreshToken, user }
+2. Send accessToken as: Authorization: Bearer <accessToken>
+3. On expiry: POST /api/auth/refresh → a new pair
+4. To end the session: POST /api/auth/logout (refreshToken in the body)
 ```
-1. POST /api/auth/login → { accessToken, refreshToken, user }
-2. Использовать accessToken в заголовке: Authorization: Bearer <accessToken>
-3. При истечении accessToken: POST /api/auth/refresh → { accessToken, refreshToken }
-4. При завершении сессии: POST /api/auth/logout (с refreshToken в body)
-```
 
 ---
 
-## Система ролей (RBAC)
+## Roles (RBAC)
 
-| Действие | ADMIN | MANAGER | WORKER |
-|---|:---:|:---:|:---:|
-| Создание заказов | ✅ | ✅ | ❌ |
-| Просмотр всех заказов | ✅ | ✅ | ❌ |
-| Просмотр своих заказов | ✅ | ✅ | ✅ |
-| Назначение исполнителей | ✅ | ✅ | ❌ |
-| Изменение статуса (IN_PROGRESS/DONE) | ✅ | ✅ | только назначенный |
-| Управление пользователями | ✅ | просмотр | ❌ |
-| Смена ролей | ✅ | ❌ | ❌ |
-| Блокировка пользователей | ✅ | ❌ | ❌ |
-| Просмотр всех аудит-логов | ✅ | ❌ | ❌ |
-| Своя активность | ✅ | ✅ | ✅ |
+| Action                              | ADMIN | MANAGER  | WORKER       |
+| ----------------------------------- | :---: | :------: | :----------: |
+| Create orders                       |  ✅   |    ✅    |      ❌      |
+| View all orders                     |  ✅   |    ✅    |      ❌      |
+| View own orders                     |  ✅   |    ✅    |      ✅      |
+| Assign workers                      |  ✅   |    ✅    |      ❌      |
+| Move to IN_PROGRESS / DONE          |  ✅   |    ✅    | assignee only|
+| Manage users                        |  ✅   | read only|      ❌      |
+| Change roles                        |  ✅   |    ❌    |      ❌      |
+| Block users                         |  ✅   |    ❌    |      ❌      |
+| Read all audit entries              |  ✅   |    ❌    |      ❌      |
+| Read own activity                   |  ✅   |    ✅    |      ✅      |
 
 ---
 
-## FSM статусов заказов
+## Order status machine
 
-```
-         ┌─────────────┐
+```text
+         ┌──────────────┐
          │     NEW      │
          └──────┬───────┘
                 │
         ┌───────┴────────┐
         ▼                ▼
- ┌────────────┐    ┌───────────┐
- │ IN_PROGRESS │    │ CANCELLED │
- └──────┬──────┘    └───────────┘
+ ┌─────────────┐   ┌───────────┐
+ │ IN_PROGRESS │   │ CANCELLED │
+ └──────┬──────┘   └───────────┘
         │
     ┌───┴────┐
     ▼        ▼
@@ -454,56 +466,57 @@ API использует **JWT Bearer Token** аутентификацию с д
  └──────┘ └───────────┘
 ```
 
-| Из \ В | NEW | IN_PROGRESS | DONE | CANCELLED |
-|---|:---:|:---:|:---:|:---:|
-| NEW | — | ✅ | ❌ | ✅ |
-| IN_PROGRESS | ❌ | — | ✅ | ✅ |
-| DONE | ❌ | ❌ | — | ❌ |
-| CANCELLED | ❌ | ❌ | ❌ | — |
+| From \ To   | NEW | IN_PROGRESS | DONE | CANCELLED |
+| ----------- | :-: | :---------: | :--: | :-------: |
+| NEW         |  —  |     ✅      |  ❌  |    ✅     |
+| IN_PROGRESS |  ❌ |      —      |  ✅  |    ✅     |
+| DONE        |  ❌ |     ❌      |  —   |    ❌     |
+| CANCELLED   |  ❌ |     ❌      |  ❌  |     —     |
 
-**Важно:** Перевести заказ в `IN_PROGRESS` или `DONE` может только назначенный исполнитель, ADMIN или MANAGER.
-
----
-
-## Rate Limiting
-
-| Уровень | Лимит | Окно |
-|---|---|---|
-| Short | 10 запросов | 1 секунда |
-| Medium | 100 запросов | 1 минута |
-| Long | 1000 запросов | 1 час |
-
-ADMIN-пользователи пропускаются без ограничений. Health-эндпоинты освобождены от лимитов.
+Only the assignee, an ADMIN or a MANAGER may move an order to `IN_PROGRESS` or `DONE`.
 
 ---
 
-## Тестирование
+## Rate limiting
+
+| Window | Limit         | Period   |
+| ------ | ------------- | -------- |
+| Short  | 10 requests   | 1 second |
+| Medium | 100 requests  | 1 minute |
+| Long   | 1000 requests | 1 hour   |
+
+Authentication endpoints are stricter (5 login attempts per 15 minutes, 3 registrations per hour). Admins bypass throttling and health endpoints are exempt.
+
+---
+
+## Telegram bot
+
+The service ships with an optional Telegram bot: browse and create orders, pick them up, complete or cancel them, and receive notifications. It is disabled unless `TELEGRAM_BOT_ENABLED=true`, and the API runs perfectly well without it.
+
+See [TELEGRAM_BOT_README.md](TELEGRAM_BOT_README.md) for setup and the command list.
+
+---
+
+## Testing
 
 ```bash
-# Unit тесты
-npm run test
-
-# Unit тесты с watch-режимом
-npm run test:watch
-
-# Тесты с coverage
-npm run test:cov
-
-# E2E тесты
-npm run test:e2e
+npm run test         # unit tests
+npm run test:watch   # watch mode
+npm run test:cov     # with coverage
+npm run test:e2e     # end-to-end (configuration only, no specs yet)
 ```
 
-Покрыты unit-тестами:
-- `AuthService` — регистрация, логин, refresh, logout
-- `UsersService` — CRUD, RBAC-проверки, блокировка
-- `OrdersService` — создание, FSM, назначение, отмена
-- `AuditsService` — создание логов, фильтрация, статистика, очистка
+Unit tests cover:
+
+- `UsersService` — CRUD, role rules, blocking
+- `OrdersService` — creation, status transitions, assignment, cancellation
+- `AuditsService` — writing entries, filtering, statistics, cleanup
 
 ---
 
-## Примеры запросов
+## Request examples
 
-### 1. Регистрация
+### Register
 
 ```bash
 curl -X POST http://localhost:3000/api/auth/register \
@@ -515,7 +528,8 @@ curl -X POST http://localhost:3000/api/auth/register \
   }'
 ```
 
-**Ответ (201):**
+Response (201):
+
 ```json
 {
   "data": {
@@ -537,118 +551,88 @@ curl -X POST http://localhost:3000/api/auth/register \
 }
 ```
 
----
-
-### 2. Вход в систему
+### Sign in
 
 ```bash
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@example.com",
-    "password": "admin123"
-  }'
+  -d '{ "email": "admin@example.com", "password": "admin123" }'
 ```
 
----
-
-### 3. Обновление токена
+### Rotate tokens
 
 ```bash
 curl -X POST http://localhost:3000/api/auth/refresh \
   -H "Content-Type: application/json" \
-  -d '{
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }'
+  -d '{ "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }'
 ```
 
----
-
-### 4. Создание заказа (MANAGER/ADMIN)
+### Create an order (ADMIN / MANAGER)
 
 ```bash
 curl -X POST http://localhost:3000/api/orders \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Разработка модуля аутентификации",
-    "description": "Реализовать JWT с refresh токенами",
+    "title": "Build the authentication module",
+    "description": "Implement JWT with refresh tokens",
     "priority": "HIGH",
     "deadline": "2026-03-31T23:59:59.000Z",
     "assignedToId": "550e8400-e29b-41d4-a716-446655440003"
   }'
 ```
 
----
-
-### 5. Список заказов с фильтрами
+### List orders with filters
 
 ```bash
-# Активные высокоприоритетные заказы, страница 2
+# High-priority work in progress, page 2
 curl "http://localhost:3000/api/orders?status=IN_PROGRESS&priority=HIGH&page=2&limit=5&sortBy=deadline&sortOrder=asc" \
   -H "Authorization: Bearer <accessToken>"
 
-# Просроченные назначенные заказы
+# Overdue orders
 curl "http://localhost:3000/api/orders?overdue=true&page=1&limit=10" \
   -H "Authorization: Bearer <accessToken>"
 
-# Поиск по названию
-curl "http://localhost:3000/api/orders?search=аутентификация" \
+# Full-text search
+curl "http://localhost:3000/api/orders?search=authentication" \
   -H "Authorization: Bearer <accessToken>"
 ```
 
----
-
-### 6. Изменение статуса заказа (FSM)
+### Change status
 
 ```bash
-# Перевести заказ в работу (только назначенный исполнитель)
 curl -X PATCH http://localhost:3000/api/orders/660e8400-e29b-41d4-a716-446655440001/status \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{ "status": "IN_PROGRESS" }'
-
-# Завершить заказ
-curl -X PATCH http://localhost:3000/api/orders/660e8400-e29b-41d4-a716-446655440001/status \
-  -H "Authorization: Bearer <accessToken>" \
-  -H "Content-Type: application/json" \
-  -d '{ "status": "DONE" }'
 ```
 
----
-
-### 7. Отмена заказа с причиной
+### Cancel with a reason
 
 ```bash
 curl -X POST http://localhost:3000/api/orders/660e8400-e29b-41d4-a716-446655440001/cancel \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "reason": "Заказчик изменил требования, задача больше не актуальна"
-  }'
+  -d '{ "reason": "Requirements withdrawn by the client" }'
 ```
 
----
-
-### 8. Назначение исполнителя
+### Assign and unassign
 
 ```bash
-# Назначить
+# Assign
 curl -X PATCH http://localhost:3000/api/orders/660e8400-e29b-41d4-a716-446655440001/assign \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{ "assignedToId": "550e8400-e29b-41d4-a716-446655440003" }'
 
-# Снять назначение
+# Unassign
 curl -X PATCH http://localhost:3000/api/orders/660e8400-e29b-41d4-a716-446655440001/assign \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{ "assignedToId": null }'
 ```
 
----
-
-### 9. Смена роли пользователя (ADMIN)
+### Change a role (ADMIN)
 
 ```bash
 curl -X PATCH http://localhost:3000/api/users/550e8400-e29b-41d4-a716-446655440003/role \
@@ -657,27 +641,13 @@ curl -X PATCH http://localhost:3000/api/users/550e8400-e29b-41d4-a716-4466554400
   -d '{ "role": "MANAGER" }'
 ```
 
----
-
-### 10. Блокировка пользователя (ADMIN)
-
-```bash
-curl -X PATCH http://localhost:3000/api/users/550e8400-e29b-41d4-a716-446655440003/active \
-  -H "Authorization: Bearer <adminAccessToken>" \
-  -H "Content-Type: application/json" \
-  -d '{ "isActive": false }'
-```
-
----
-
-### 11. Аудит-логи заказа
+### Audit trail of an order
 
 ```bash
 curl http://localhost:3000/api/audit/logs/order/660e8400-e29b-41d4-a716-446655440001 \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-**Ответ:**
 ```json
 {
   "data": [
@@ -703,25 +673,12 @@ curl http://localhost:3000/api/audit/logs/order/660e8400-e29b-41d4-a716-44665544
 }
 ```
 
----
-
-### 12. Все аудит-логи с фильтрацией (ADMIN)
-
-```bash
-# Логи изменений статуса за конкретный период
-curl "http://localhost:3000/api/audit/logs?action=STATUS_CHANGED&dateFrom=2026-02-01&dateTo=2026-02-14&page=1&limit=20" \
-  -H "Authorization: Bearer <adminAccessToken>"
-```
-
----
-
-### 13. Health check
+### Health check
 
 ```bash
 curl http://localhost:3000/health
 ```
 
-**Ответ (200):**
 ```json
 {
   "status": "ok",
@@ -732,26 +689,26 @@ curl http://localhost:3000/health
     "storage": { "status": "up" }
   },
   "error": {},
-  "details": { ... }
+  "details": {}
 }
 ```
 
 ---
 
-## Формат ответов
+## Response format
 
-Все успешные ответы оборачиваются в единый формат через `TransformInterceptor`:
+Successful responses are wrapped by `TransformInterceptor`:
 
 ```json
 {
-  "data": { ... },
+  "data": {},
   "statusCode": 200,
   "timestamp": "2026-02-14T12:00:00.000Z",
   "path": "/api/orders"
 }
 ```
 
-Ошибки возвращают стандартный формат через `AllExceptionsFilter`:
+Errors are normalised by `AllExceptionsFilter`:
 
 ```json
 {
@@ -760,25 +717,27 @@ curl http://localhost:3000/health
   "path": "/api/orders/non-existent-id",
   "method": "GET",
   "error": "Not Found",
-  "message": "Заказ не найден"
+  "message": "Order not found"
 }
 ```
 
----
-
-## Действия аудит-логов
-
-| Действие | Описание |
-|---|---|
-| `ORDER_CREATED` | Создание нового заказа |
-| `ORDER_UPDATED` | Обновление полей заказа |
-| `ORDER_CANCELLED` | Отмена заказа (newValue содержит `cancelReason`) |
-| `STATUS_CHANGED` | Изменение статуса |
-| `ASSIGNED` | Назначение исполнителя |
-| `UNASSIGNED` | Снятие исполнителя |
+Stack traces are included outside production only. Request bodies written to the log have credential fields redacted.
 
 ---
 
-## Лицензия
+## Audit actions
+
+| Action            | Meaning                                          |
+| ----------------- | ------------------------------------------------ |
+| `ORDER_CREATED`   | A new order was created                          |
+| `ORDER_UPDATED`   | Order fields were changed                        |
+| `ORDER_CANCELLED` | Order cancelled; `newValue` holds `cancelReason` |
+| `STATUS_CHANGED`  | Status transition                                |
+| `ASSIGNED`        | A worker was assigned                            |
+| `UNASSIGNED`      | The assignee was removed                         |
+
+---
+
+## License
 
 UNLICENSED — private project.

@@ -12,20 +12,22 @@ import { BotModule } from './bot/bot.module';
 import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { throttlerConfig } from './common/config/throttler.config';
+import { validateEnv } from './config/env.validation';
 
 @Module({
   imports: [
-    // Глобальная конфигурация environment variables
+    // Global environment configuration, validated at startup
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
       cache: true,
+      validate: validateEnv,
     }),
 
-    // Rate Limiting (защита от DDoS и чрезмерного использования)
+    // Rate limiting
     ThrottlerModule.forRoot(throttlerConfig),
 
-    // Основные модули приложения
+    // Application modules
     AuthModule,
     PrismaModule,
     UsersModule,
@@ -33,11 +35,11 @@ import { throttlerConfig } from './common/config/throttler.config';
     AuditsModule,
     HealthModule,
 
-    // Telegram Bot (опциональный модуль)
+    // Telegram bot (optional)
     BotModule.forRoot(),
   ],
   providers: [
-    // Глобальный guard для rate limiting
+    // Global rate limiting guard
     {
       provide: APP_GUARD,
       useClass: CustomThrottlerGuard,
@@ -46,7 +48,7 @@ import { throttlerConfig } from './common/config/throttler.config';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // Применяем middleware для добавления Request ID ко всем маршрутам
+    // Attach a request id to every route, for traceable logs
     consumer.apply(RequestIdMiddleware).forRoutes('*');
   }
 }

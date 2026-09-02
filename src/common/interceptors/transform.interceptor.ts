@@ -10,8 +10,7 @@ export interface Response<T> {
 }
 
 /**
- * Interceptor для трансформации ответов API в стандартизированный формат
- * Добавляет метаданные к каждому успешному ответу
+ * Wraps every successful response in a consistent envelope with metadata.
  */
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> {

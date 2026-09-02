@@ -12,11 +12,11 @@ import { SkipThrottle } from '../decorators/throttle-custom.decorator';
 
 /**
  * Health Check Controller
- * Предоставляет эндпоинты для проверки здоровья приложения
+ * Health endpoints for load balancers and orchestrators.
  */
 @ApiTags('Health')
 @Controller('health')
-@SkipThrottle() // Пропускаем rate limiting для health checks
+@SkipThrottle() // health probes are never rate limited
 export class HealthController {
   constructor(
     private health: HealthCheckService,
@@ -26,15 +26,12 @@ export class HealthController {
     private prisma: PrismaService,
   ) {}
 
-  /**
-   * Базовая проверка здоровья
-   */
   @Get()
   @HealthCheck()
-  @ApiOperation({ summary: 'Базовая проверка здоровья приложения' })
+  @ApiOperation({ summary: 'Basic health check' })
   @ApiResponse({
     status: 200,
-    description: 'Приложение работает',
+    description: 'Application is up',
     schema: {
       type: 'object',
       properties: {
@@ -47,33 +44,30 @@ export class HealthController {
   })
   check() {
     return this.health.check([
-      // Проверка подключения к базе данных
+      // Database connectivity
       () => this.prismaHealth.pingCheck('database', this.prisma),
 
-      // Проверка использования памяти (heap не должна превышать 150MB)
+      // Heap usage must stay under 150 MB
       () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
 
-      // Проверка использования RSS памяти (не должна превышать 150MB)
+      // RSS must stay under 150 MB
       () => this.memory.checkRSS('memory_rss', 150 * 1024 * 1024),
 
-      // Проверка свободного места на диске (должно быть минимум 1GB)
+      // Disk must not be nearly full
       () =>
         this.disk.checkStorage('storage', {
           path: '/',
-          thresholdPercent: 0.9, // 90% заполнения - критично
+          thresholdPercent: 0.9, // 90% full is critical
         }),
     ]);
   }
 
-  /**
-   * Детальная проверка здоровья
-   */
   @Get('detailed')
   @HealthCheck()
-  @ApiOperation({ summary: 'Детальная проверка здоровья приложения' })
+  @ApiOperation({ summary: 'Detailed health check' })
   @ApiResponse({
     status: 200,
-    description: 'Детальная информация о здоровье',
+    description: 'Detailed health information',
   })
   detailedCheck() {
     return this.health.check([
@@ -88,15 +82,11 @@ export class HealthController {
     ]);
   }
 
-  /**
-   * Простая проверка живости (liveness probe)
-   * Для Kubernetes и других оркестраторов
-   */
   @Get('live')
-  @ApiOperation({ summary: 'Liveness probe - проверка, что приложение запущено' })
+  @ApiOperation({ summary: 'Liveness probe — the process is running' })
   @ApiResponse({
     status: 200,
-    description: 'Приложение живо',
+    description: 'Application is alive',
     schema: {
       type: 'object',
       properties: {
@@ -112,18 +102,14 @@ export class HealthController {
     };
   }
 
-  /**
-   * Проверка готовности (readiness probe)
-   * Для Kubernetes и других оркестраторов
-   */
   @Get('ready')
   @HealthCheck()
   @ApiOperation({
-    summary: 'Readiness probe - проверка, что приложение готово принимать запросы',
+    summary: 'Readiness probe — the application can serve traffic',
   })
   @ApiResponse({
     status: 200,
-    description: 'Приложение готово',
+    description: 'Application is ready',
   })
   readiness() {
     return this.health.check([() => this.prismaHealth.pingCheck('database', this.prisma)]);

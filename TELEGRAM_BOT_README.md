@@ -1,222 +1,153 @@
 # WorkTrack Telegram Bot
 
-Интеграция Telegram бота для WorkTrack API.
+Optional Telegram interface for the WorkTrack API. The service runs fine without it — everything below applies only when the bot is switched on.
 
-## Возможности
+## What it does
 
-✅ **Реализовано:**
-- `/start` - Регистрация и приветствие
-- `/tasks` - Просмотр всех заказов (с учётом роли)
-- `/create` - Создание нового заказа (для ADMIN/MANAGER)
-- `/my` - Просмотр своих заказов
-- `/profile` - Просмотр профиля
-- `/stats` - Статистика заказов
-- Inline кнопки для управления заказами:
-  - 👍 Взять в работу
-  - ▶️ Начать работу
-  - ✅ Завершить
-  - ❌ Отменить
-  - ℹ️ Детали
+- `/start` — registers the Telegram account and shows the command list
+- `/tasks` — lists orders, filtered by the caller's role
+- `/create` — guided order creation (ADMIN / MANAGER)
+- `/my` — orders you created or are assigned to
+- `/profile` — your profile and personal statistics
+- `/stats` — order statistics
+- Inline buttons on every order card:
+  - 👍 Pick up
+  - ▶️ Start
+  - ✅ Complete
+  - ❌ Cancel
+  - ℹ️ Details
 
-## Установка
+## Setup
 
-### 1. Установить зависимости
+### 1. Create a bot
 
-```bash
-npm install nestjs-telegraf telegraf
-```
+1. Open [@BotFather](https://t.me/BotFather) in Telegram
+2. Send `/newbot`
+3. Follow the prompts
+4. Copy the token — it looks like `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`
 
-### 2. Создать бота в Telegram
+### 2. Configure the environment
 
-1. Найдите [@BotFather](https://t.me/BotFather) в Telegram
-2. Отправьте команду `/newbot`
-3. Следуйте инструкциям
-4. Получите токен (примерно такой: `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
-
-### 3. Настроить переменные окружения
-
-Добавьте в `.env`:
+Add to `.env`:
 
 ```env
-# Telegram Bot
+TELEGRAM_BOT_ENABLED=true
 TELEGRAM_BOT_TOKEN=your-bot-token-here
 TELEGRAM_USE_WEBHOOK=false
 ```
 
-### 4. Применить миграцию базы данных
+`TELEGRAM_BOT_ENABLED` is the master switch. Startup validation refuses to boot with the bot enabled and no token, rather than silently running without it.
+
+### 3. Apply migrations
+
+The bot needs the `telegram_id` column on `users`:
 
 ```bash
-# Применить миграцию для добавления telegram_id
 npm run prisma:migrate
 ```
 
-Или вручную выполнить SQL:
-
-```sql
-ALTER TABLE "users" ADD COLUMN "telegram_id" BIGINT;
-CREATE UNIQUE INDEX "users_telegram_id_key" ON "users"("telegram_id") WHERE "telegram_id" IS NOT NULL;
-```
-
-### 5. Запустить приложение
+### 4. Run
 
 ```bash
-# Development
-npm run start:dev
-
-# Production
-npm run build
-npm run start:prod
+npm run start:dev     # development
+npm run build && npm run start:prod   # production
 ```
 
-## Архитектура
+## Architecture
 
+```text
+src/bot/
+ ├─ bot.module.ts                # dynamic module, wired only when enabled
+ ├─ bot.service.ts               # shared helpers, user lookup, notifications
+ └─ handlers/
+     ├─ start.handler.ts         # /start
+     ├─ tasks.handler.ts         # /tasks
+     ├─ create-task.handler.ts   # /create wizard
+     ├─ my-tasks.handler.ts      # /my, /profile, /stats
+     └─ callback.handler.ts      # inline buttons, cancellation flow
 ```
-src/
- ├─ bot/
- │   ├─ bot.module.ts           # Главный модуль бота
- │   ├─ bot.service.ts          # Сервис бота (утилиты, уведомления)
- │   └─ handlers/
- │       ├─ start.handler.ts    # /start
- │       ├─ tasks.handler.ts    # /tasks
- │       ├─ create-task.handler.ts  # /create
- │       ├─ my-tasks.handler.ts     # /my, /profile, /stats
- │       └─ callback.handler.ts     # Обработка inline кнопок
-```
 
-## Использование
+The bot calls the same services the REST API uses — `OrdersService`, `UsersService`, `AuditsService` — so role checks, the status machine and the audit trail apply identically. Actions taken in Telegram appear in the audit log exactly like HTTP requests.
 
-### Первый запуск
+## Usage
 
-1. Напишите боту `/start`
-2. Бот автоматически создаст вам аккаунт с ролью `WORKER`
-3. Используйте команды для работы с заказами
+### First contact
 
-### Основные команды
+Send `/start`. An account is provisioned automatically with the `WORKER` role and linked to your Telegram id.
 
-- `/start` - Начать работу с ботом
-- `/tasks` - Показать все заказы
-- `/create` - Создать новый заказ (только для ADMIN/MANAGER)
-- `/my` - Мои заказы
-- `/profile` - Мой профиль
-- `/stats` - Статистика
+> Anyone who can reach the bot gets a WORKER account this way. Keep the bot private, or restrict who may message it, if that is not what you want.
 
-### Работа с заказами
+### Creating an order
 
-#### Создание заказа
-
-```
+```text
 /create
-→ Введите название
-→ Введите описание (или -)
-→ Выберите приоритет
-→ Введите дедлайн (ДД.ММ.ГГГГ ЧЧ:ММ или -)
+→ send the title
+→ send a description (or "-" to skip)
+→ choose a priority
+→ send a deadline as DD.MM.YYYY HH:MM (or "-" to skip)
 ```
 
-#### Управление заказом
+Send `/cancel` at any point to abort.
 
-После каждого заказа отображаются кнопки:
-- **👍 Взять в работу** - назначить заказ на себя
-- **▶️ Начать работу** - изменить статус на IN_PROGRESS
-- **✅ Завершить** - изменить статус на DONE
-- **❌ Отменить** - отменить заказ
-- **ℹ️ Детали** - показать полную информацию
+### Cancelling an order
 
-## Интеграция с backend
+Press ❌ Cancel, then send the reason as the next message — at least 10 characters, the same rule the API enforces. Send `/cancel` instead to abort without changing the order.
 
-Бот использует существующие сервисы:
-- `OrdersService` - управление заказами
-- `UsersService` - управление пользователями
-- `AuditsService` - логирование действий
+## Roles
 
-Все действия через бота записываются в audit logs.
+| Action              | ADMIN | MANAGER | WORKER            |
+| ------------------- | :---: | :-----: | :---------------: |
+| Create orders       |  ✅   |   ✅    |        ❌         |
+| View all orders     |  ✅   |   ✅    |        ❌         |
+| View own orders     |  ✅   |   ✅    |        ✅         |
+| Pick up an order    |  ✅   |   ✅    |        ❌         |
+| Start / complete    |  ✅   |   ✅    | ✅ (if assigned)  |
+| Cancel an order     |  ✅   |   ✅    |        ❌         |
 
-## Роли и права доступа
+## Polling vs webhook
 
-| Действие | ADMIN | MANAGER | WORKER |
-|----------|-------|---------|--------|
-| Создание заказов | ✅ | ✅ | ❌ |
-| Просмотр всех заказов | ✅ | ✅ | ❌ |
-| Просмотр своих заказов | ✅ | ✅ | ✅ |
-| Взять в работу | ✅ | ✅ | ✅ (если назначен) |
-| Завершить заказ | ✅ | ✅ | ✅ (если назначен) |
-| Отменить заказ | ✅ | ✅ | ❌ |
-
-## Webhook vs Polling
-
-### Development (Polling)
+Development — long polling:
 
 ```env
 TELEGRAM_USE_WEBHOOK=false
 ```
 
-Бот будет опрашивать Telegram API каждые несколько секунд.
-
-### Production (Webhook)
+Production — webhook:
 
 ```env
 TELEGRAM_USE_WEBHOOK=true
-TELEGRAM_WEBHOOK_DOMAIN=https://yourdomain.com
+TELEGRAM_WEBHOOK_DOMAIN=https://your-domain.com
 TELEGRAM_WEBHOOK_PATH=/telegram-webhook
 ```
 
-Telegram будет отправлять обновления на ваш сервер.
+Webhook mode requires a publicly reachable domain with a valid HTTPS certificate. Startup validation rejects webhook mode without a domain.
 
-**Требования:**
-- HTTPS с валидным сертификатом
-- Публично доступный домен
+## Notifications
 
-## Уведомления
+`BotService.sendNotification(userId, message)` delivers a message to any user who has linked a Telegram account.
 
-Бот отправляет уведомления при:
-- ✅ Завершении заказа (создателю заказа)
-- ❌ Отмене заказа (исполнителю)
-- 🆕 Назначении заказа (исполнителю)
-
-Пример использования:
-
-```typescript
-// В OrdersService
-async changeStatus(...) {
-  // ... логика изменения статуса
-  
-  // Отправить уведомление
-  if (order.status === OrderStatus.DONE && order.assignedToId) {
-    await this.botService.sendNotification(
-      order.createdBy.id,
-      `✅ Заказ "${order.title}" завершён пользователем ${order.assignedTo.name}`
-    );
-  }
-}
-```
+Currently one notification is wired up: when an order is completed, its creator is notified. Adding more is a matter of calling the same method from the relevant service.
 
 ## Troubleshooting
 
-### Бот не отвечает
+**The bot does not respond**
 
-1. Проверьте токен в `.env`
-2. Проверьте логи: `docker-compose logs -f app`
-3. Убедитесь, что приложение запущено
+1. Check `TELEGRAM_BOT_ENABLED=true` and the token in `.env`
+2. Check the logs: `docker compose logs -f app`
+3. Confirm the application actually started
 
-### Ошибка "User not found"
+**"User not found"**
 
-1. Напишите боту `/start` для создания аккаунта
-2. Проверьте, что применена миграция с `telegram_id`
+Send `/start` first — it creates the account and links your Telegram id. Also confirm the `telegram_id` migration was applied.
 
-### Webhook не работает
+**Webhook not delivering**
 
-1. Убедитесь, что домен доступен по HTTPS
-2. Проверьте сертификат SSL
-3. Проверьте логи Telegram: `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`
+1. Confirm the domain is reachable over HTTPS with a valid certificate
+2. Ask Telegram what it thinks: `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`
 
-## Расширение функциональности
+## Extending
 
-### Добавить новую команду
-
-1. Создайте handler в `src/bot/handlers/`
-2. Используйте декоратор `@Command('commandname')`
-3. Зарегистрируйте в `bot.module.ts`
-
-Пример:
+Add a command:
 
 ```typescript
 @Update()
@@ -224,23 +155,23 @@ async changeStatus(...) {
 export class HelpHandler {
   @Command('help')
   async onHelp(ctx: BotContext) {
-    await ctx.reply('Справка по командам...');
+    await ctx.reply('Available commands: ...');
   }
 }
 ```
 
-### Добавить inline кнопку
+Register the handler in `bot.module.ts`.
 
-В `callback.handler.ts`:
+Add an inline button action in `callback.handler.ts`:
 
 ```typescript
 @Action(/^myaction_(.+)$/)
 async onMyAction(@Ctx() ctx: any) {
   const param = ctx.match[1];
-  // ... ваша логика
+  // ...
 }
 ```
 
-## Лицензия
+## License
 
-UNLICENSED — private project
+UNLICENSED — private project.

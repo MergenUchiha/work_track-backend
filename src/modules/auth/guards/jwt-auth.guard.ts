@@ -3,7 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 
 /**
- * Guard для защиты роутов с помощью JWT Access Token
+ * Protects routes with the JWT access token.
  *
  * @example
  * ```typescript
@@ -24,8 +24,6 @@ export class JwtAuthGuard extends AuthGuard('jwt-access') {
   }
 
   canActivate(context: ExecutionContext) {
-    // Здесь можно добавить дополнительную логику
-    // Например, пропускать публичные эндпоинты
     return super.canActivate(context);
   }
 }

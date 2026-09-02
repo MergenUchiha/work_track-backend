@@ -5,14 +5,11 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 
 export interface JwtRefreshPayload {
-  sub: string; // userId
-  tokenId: string; // ID refresh токена в БД
+  sub: string; // user id
+  tokenId: string; // id of the refresh token row
 }
 
-/**
- * Стратегия для валидации JWT Refresh Token
- * Извлекает токен из body запроса
- */
+/** Validates the JWT refresh token, which is read from the request body. */
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
   constructor(private configService: ConfigService) {
@@ -20,26 +17,21 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
       jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_REFRESH_SECRET'),
-      passReqToCallback: true, // Передаём req в validate
+      passReqToCallback: true, // gives validate() access to the request
     });
   }
 
-  /**
-   * Validate вызывается после успешной проверки JWT
-   * Получаем payload и сам токен для дальнейшей валидации в БД
-   */
+  /** Returns the payload plus the raw token, which the service checks against the database. */
   async validate(req: Request, payload: JwtRefreshPayload) {
     const refreshToken = req.body?.refreshToken;
 
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh токен отсутствует');
+      throw new UnauthorizedException('Refresh token is missing');
     }
-
-    // Возвращаем payload + сам токен для проверки в сервисе
     return {
       sub: payload.sub,
       tokenId: payload.tokenId,
-      refreshToken, // Сам токен для проверки хеша в БД
+      refreshToken, // hashed and compared with the stored value
     };
   }
 }

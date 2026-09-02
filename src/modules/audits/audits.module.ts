@@ -12,7 +12,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 })
 export class AuditsModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // Применяем middleware ко всем роутам
+    // Access logging for every route
     consumer.apply(AuditMiddleware).forRoutes('*');
   }
 }

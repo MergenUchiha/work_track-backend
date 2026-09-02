@@ -4,8 +4,7 @@ import { UserRole } from '@prisma/client';
 export const ROLES_KEY = 'roles';
 
 /**
- * Декоратор для указания разрешенных ролей для эндпоинта
- * Используется совместно с RolesGuard
+ * Declares which roles may call an endpoint. Enforced by RolesGuard.
  *
  * @example
  * ```typescript

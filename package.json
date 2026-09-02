@@ -1,8 +1,8 @@
 {
   "name": "worktrack-backend",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Backend service for task and workflow management",
-  "author": "",
+  "author": "github.com/MergenUchiha",
   "private": true,
   "license": "UNLICENSED",
   "type": "commonjs",
@@ -30,7 +30,7 @@
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f app",
     "docker:restart": "docker-compose restart app",
-    "prepare": "husky install"
+    "prepare": "husky"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -51,7 +51,6 @@
     "nestjs-telegraf": "^2.7.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-    "prisma": "^5.15.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "telegraf": "^4.16.3",
@@ -80,6 +79,7 @@
     "jest": "^29.7.0",
     "lint-staged": "^15.2.2",
     "prettier": "^3.2.5",
+    "prisma": "^5.15.0",
     "source-map-support": "^0.5.21",
     "supertest": "^6.3.4",
     "ts-jest": "^29.1.2",

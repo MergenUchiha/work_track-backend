@@ -1,8 +1,7 @@
 import { HelmetOptions } from 'helmet';
 
 /**
- * Конфигурация Helmet для безопасности HTTP headers
- * Защищает от различных web-уязвимостей
+ * Helmet configuration: sets the HTTP security headers.
  */
 export const helmetConfig: HelmetOptions = {
   // Content Security Policy
@@ -27,7 +26,7 @@ export const helmetConfig: HelmetOptions = {
 
   // HSTS (HTTP Strict Transport Security)
   hsts: {
-    maxAge: 31536000, // 1 год
+    maxAge: 31536000, // 1 year
     includeSubDomains: true,
     preload: true,
   },

@@ -12,19 +12,19 @@ import { OrderPriority } from '@prisma/client';
 
 export class CreateOrderDto {
   @ApiProperty({
-    example: 'Разработка нового модуля аутентификации',
-    description: 'Название заказа',
+    example: 'Build the new authentication module',
+    description: 'Order title',
     minLength: 3,
     maxLength: 255,
   })
   @IsString()
-  @MinLength(3, { message: 'Название должно содержать минимум 3 символа' })
-  @MaxLength(255, { message: 'Название не должно превышать 255 символов' })
+  @MinLength(3, { message: 'Title must be at least 3 characters' })
+  @MaxLength(255, { message: 'Title must not exceed 255 characters' })
   title: string;
 
   @ApiPropertyOptional({
-    example: 'Необходимо реализовать JWT аутентификацию с refresh токенами',
-    description: 'Подробное описание заказа',
+    example: 'Implement JWT authentication with refresh tokens',
+    description: 'Detailed description',
   })
   @IsOptional()
   @IsString()
@@ -33,28 +33,28 @@ export class CreateOrderDto {
   @ApiPropertyOptional({
     enum: OrderPriority,
     example: OrderPriority.MEDIUM,
-    description: 'Приоритет заказа',
+    description: 'Priority',
     default: OrderPriority.MEDIUM,
   })
   @IsOptional()
   @IsEnum(OrderPriority, {
-    message: 'Некорректный приоритет. Доступные: LOW, MEDIUM, HIGH',
+    message: 'Invalid priority. Allowed values: LOW, MEDIUM, HIGH',
   })
   priority?: OrderPriority;
 
   @ApiPropertyOptional({
     example: '2024-12-31T23:59:59.000Z',
-    description: 'Крайний срок выполнения',
+    description: 'Deadline',
   })
   @IsOptional()
-  @IsDateString({}, { message: 'Некорректный формат даты' })
+  @IsDateString({}, { message: 'Invalid date format' })
   deadline?: string;
 
   @ApiPropertyOptional({
     example: '550e8400-e29b-41d4-a716-446655440003',
-    description: 'UUID пользователя, которому назначен заказ',
+    description: 'UUID of the assignee',
   })
   @IsOptional()
-  @IsUUID('4', { message: 'Некорректный формат UUID' })
+  @IsUUID('4', { message: 'Invalid UUID format' })
   assignedToId?: string;
 }

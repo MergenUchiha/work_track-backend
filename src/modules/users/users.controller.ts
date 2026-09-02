@@ -31,125 +31,119 @@ import { UserDto } from './dto/user.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  /**
-   * Получить свой профиль
-   */
   @Get('profile')
-  @ApiOperation({ summary: 'Получить свой профиль' })
+  @ApiOperation({ summary: 'Get your own profile' })
   @ApiResponse({
     status: 200,
-    description: 'Профиль текущего пользователя',
+    description: 'Current user profile',
     type: UserDto,
   })
   @ApiResponse({
     status: 401,
-    description: 'Не авторизован',
+    description: 'Unauthorized',
   })
   async getProfile(@CurrentUser('sub') userId: string) {
     return this.usersService.getProfile(userId);
   }
 
   /**
-   * Обновить свой профиль
+   * Updates the current user's own profile.
    */
   @Put('profile')
-  @ApiOperation({ summary: 'Обновить свой профиль' })
+  @ApiOperation({ summary: 'Update your own profile' })
   @ApiResponse({
     status: 200,
-    description: 'Профиль успешно обновлён',
+    description: 'Profile updated',
     type: UserDto,
   })
   @ApiResponse({
     status: 409,
-    description: 'Email уже используется',
+    description: 'Email already in use',
   })
   async updateProfile(@CurrentUser('sub') userId: string, @Body() dto: UpdateProfileDto) {
     return this.usersService.updateProfile(userId, dto);
   }
 
-  /**
-   * Получить список всех пользователей (админы и менеджеры)
-   */
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
-    summary: 'Получить список пользователей с пагинацией и фильтрацией',
-    description: 'Доступно только администраторам и менеджерам',
+    summary: 'List users with pagination and filtering',
+    description: 'Admins and managers only',
   })
   @ApiResponse({
     status: 200,
-    description: 'Список пользователей',
+    description: 'Users',
     type: PaginatedUsersDto,
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async getUsers(@Query() query: GetUsersQueryDto) {
     return this.usersService.getUsers(query);
   }
 
   /**
-   * Получить пользователя по ID
+   * Returns a user by id, subject to role rules.
    */
   @Get(':id')
   @ApiOperation({
-    summary: 'Получить пользователя по ID',
-    description: 'Пользователи могут видеть только свой профиль. Админы и менеджеры - любой.',
+    summary: 'Get a user by ID',
+    description: 'Workers can only read their own profile; admins and managers can read any.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID пользователя',
+    description: 'User UUID',
     example: '550e8400-e29b-41d4-a716-446655440001',
   })
   @ApiResponse({
     status: 200,
-    description: 'Данные пользователя',
+    description: 'User',
     type: UserDto,
   })
   @ApiResponse({
     status: 404,
-    description: 'Пользователь не найден',
+    description: 'User not found',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async getUserById(@Param('id') userId: string, @CurrentUser() currentUser: JwtPayload) {
     return this.usersService.getUserById(userId, currentUser.sub, currentUser.role);
   }
 
   /**
-   * Изменить роль пользователя (только админ)
+   * Changes a user's role. Admin only.
    */
   @Patch(':id/role')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Изменить роль пользователя',
-    description: 'Доступно только администраторам. Нельзя изменить собственную роль.',
+    summary: 'Change a user role',
+    description: 'Admins only. You cannot change your own role.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID пользователя',
+    description: 'User UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Роль успешно изменена',
+    description: 'Role changed',
     type: UserDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Невозможно изменить собственную роль',
+    description: 'You cannot change your own role',
   })
   @ApiResponse({
     status: 404,
-    description: 'Пользователь не найден',
+    description: 'User not found',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async changeRole(
     @Param('id') userId: string,
@@ -160,36 +154,36 @@ export class UsersController {
   }
 
   /**
-   * Заблокировать/разблокировать пользователя (только админ)
+   * Blocks or unblocks a user. Admin only.
    */
   @Patch(':id/active')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Заблокировать или разблокировать пользователя',
+    summary: 'Block or unblock a user',
     description:
-      'Доступно только администраторам. Нельзя изменить статус собственного аккаунта. При блокировке все refresh токены пользователя отзываются.',
+      'Admins only. You cannot change your own status. Blocking a user revokes all of their refresh tokens.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID пользователя',
+    description: 'User UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Статус успешно изменён',
+    description: 'Status changed',
     type: UserDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Невозможно изменить статус собственного аккаунта',
+    description: 'You cannot change your own status',
   })
   @ApiResponse({
     status: 404,
-    description: 'Пользователь не найден',
+    description: 'User not found',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async toggleActive(
     @Param('id') userId: string,
@@ -199,19 +193,16 @@ export class UsersController {
     return this.usersService.toggleActive(userId, dto, adminId);
   }
 
-  /**
-   * Получить статистику по пользователям (только админ)
-   */
   @Get('stats/overview')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Получить статистику по пользователям',
-    description: 'Доступно только администраторам',
+    summary: 'Get user statistics',
+    description: 'Admins only',
   })
   @ApiResponse({
     status: 200,
-    description: 'Статистика пользователей',
+    description: 'User statistics',
     schema: {
       type: 'object',
       properties: {
@@ -233,49 +224,49 @@ export class UsersController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async getUsersStats() {
     return this.usersService.getUsersStats();
   }
 
   /**
-   * Удалить пользователя (мягкое удаление - деактивация)
+   * Soft-deletes a user by deactivating the account.
    */
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Удалить пользователя (деактивация)',
+    summary: 'Delete a user (soft delete)',
     description:
-      'Доступно только администраторам. Выполняется мягкое удаление (isActive = false). Нельзя удалить собственный аккаунт.',
+      'Admins only. Performs a soft delete (isActive = false). You cannot delete your own account.',
   })
   @ApiParam({
     name: 'id',
-    description: 'UUID пользователя',
+    description: 'User UUID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Пользователь успешно деактивирован',
+    description: 'User deactivated',
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Пользователь успешно деактивирован' },
+        message: { type: 'string', example: 'User deactivated successfully' },
       },
     },
   })
   @ApiResponse({
     status: 400,
-    description: 'Невозможно удалить собственный аккаунт',
+    description: 'You cannot delete your own account',
   })
   @ApiResponse({
     status: 404,
-    description: 'Пользователь не найден',
+    description: 'User not found',
   })
   @ApiResponse({
     status: 403,
-    description: 'Недостаточно прав',
+    description: 'Insufficient permissions',
   })
   async softDeleteUser(@Param('id') userId: string, @CurrentUser('sub') adminId: string) {
     return this.usersService.softDeleteUser(userId, adminId);

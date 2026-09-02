@@ -50,7 +50,6 @@ describe('UsersService', () => {
     service = module.get<UsersService>(UsersService);
     prisma = module.get<PrismaService>(PrismaService);
 
-    // Очищаем моки перед каждым тестом
     jest.clearAllMocks();
   });
 
@@ -59,7 +58,7 @@ describe('UsersService', () => {
   });
 
   describe('getProfile', () => {
-    it('должен вернуть профиль пользователя', async () => {
+    it('returns the current user profile', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(mockUser);
 
       const result = await service.getProfile('user-id-1');
@@ -71,7 +70,7 @@ describe('UsersService', () => {
       });
     });
 
-    it('должен выбросить NotFoundException если пользователь не найден', async () => {
+    it('throws NotFoundException when the user does not exist', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(null);
 
       await expect(service.getProfile('non-existent-id')).rejects.toThrow(NotFoundException);
@@ -79,7 +78,7 @@ describe('UsersService', () => {
   });
 
   describe('getUserById', () => {
-    it('должен вернуть пользователя для админа', async () => {
+    it('returns any user for an admin', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(mockUser);
 
       const result = await service.getUserById('user-id-1', 'admin-id', UserRole.ADMIN);
@@ -87,7 +86,7 @@ describe('UsersService', () => {
       expect(result).toEqual(mockUser);
     });
 
-    it('должен вернуть пользователя если это его собственный профиль', async () => {
+    it('returns the user when it is their own profile', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(mockUser);
 
       const result = await service.getUserById('user-id-1', 'user-id-1', UserRole.WORKER);
@@ -95,7 +94,7 @@ describe('UsersService', () => {
       expect(result).toEqual(mockUser);
     });
 
-    it('должен выбросить ForbiddenException если worker пытается посмотреть чужой профиль', async () => {
+    it('throws ForbiddenException when a worker reads someone else profile', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(mockUser);
 
       await expect(
@@ -105,7 +104,7 @@ describe('UsersService', () => {
   });
 
   describe('updateProfile', () => {
-    it('должен обновить профиль пользователя', async () => {
+    it('updates the user profile', async () => {
       const updateDto = { name: 'Updated Name' };
       const updatedUser = { ...mockUser, ...updateDto };
 
@@ -121,7 +120,7 @@ describe('UsersService', () => {
       });
     });
 
-    it('должен выбросить ConflictException если email уже используется', async () => {
+    it('throws ConflictException when the email is taken', async () => {
       const updateDto = { email: 'existing@example.com' };
       const existingUser = { ...mockUser, id: 'other-id' };
 
@@ -134,7 +133,7 @@ describe('UsersService', () => {
   });
 
   describe('changeRole', () => {
-    it('должен изменить роль пользователя', async () => {
+    it('changes a user role', async () => {
       const changeRoleDto = { role: UserRole.MANAGER };
       const updatedUser = { ...mockUser, role: UserRole.MANAGER };
 
@@ -146,7 +145,7 @@ describe('UsersService', () => {
       expect(result.role).toBe(UserRole.MANAGER);
     });
 
-    it('должен выбросить BadRequestException если админ пытается изменить свою роль', async () => {
+    it('throws BadRequestException when an admin changes their own role', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(mockUser);
 
       await expect(
@@ -156,7 +155,7 @@ describe('UsersService', () => {
   });
 
   describe('toggleActive', () => {
-    it('должен заблокировать пользователя и отозвать токены', async () => {
+    it('blocks a user and revokes their tokens', async () => {
       const toggleDto = { isActive: false };
       const updatedUser = { ...mockUser, isActive: false };
 
@@ -172,7 +171,7 @@ describe('UsersService', () => {
       });
     });
 
-    it('должен выбросить BadRequestException если админ пытается заблокировать себя', async () => {
+    it('throws BadRequestException when an admin blocks themselves', async () => {
       mockPrismaService.users.findUnique.mockResolvedValue(mockUser);
 
       await expect(
@@ -182,7 +181,7 @@ describe('UsersService', () => {
   });
 
   describe('getUsers', () => {
-    it('должен вернуть пагинированный список пользователей', async () => {
+    it('returns a paginated list of users', async () => {
       const query = { page: 1, limit: 10 };
       const users = [mockUser];
 
@@ -202,7 +201,7 @@ describe('UsersService', () => {
   });
 
   describe('getUsersStats', () => {
-    it('должен вернуть статистику по пользователям', async () => {
+    it('returns user statistics', async () => {
       mockPrismaService.users.count.mockResolvedValueOnce(100);
       mockPrismaService.users.count.mockResolvedValueOnce(85);
       mockPrismaService.users.count.mockResolvedValueOnce(15);

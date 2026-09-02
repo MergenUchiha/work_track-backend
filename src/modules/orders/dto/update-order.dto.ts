@@ -4,18 +4,18 @@ import { OrderPriority } from '@prisma/client';
 
 export class UpdateOrderDto {
   @ApiPropertyOptional({
-    example: 'Обновлённое название заказа',
-    description: 'Новое название заказа',
+    example: 'Updated order title',
+    description: 'New title',
   })
   @IsOptional()
   @IsString()
-  @MinLength(3, { message: 'Название должно содержать минимум 3 символа' })
-  @MaxLength(255, { message: 'Название не должно превышать 255 символов' })
+  @MinLength(3, { message: 'Title must be at least 3 characters' })
+  @MaxLength(255, { message: 'Title must not exceed 255 characters' })
   title?: string;
 
   @ApiPropertyOptional({
-    example: 'Обновлённое описание заказа',
-    description: 'Новое описание заказа',
+    example: 'Updated order description',
+    description: 'New description',
   })
   @IsOptional()
   @IsString()
@@ -24,19 +24,19 @@ export class UpdateOrderDto {
   @ApiPropertyOptional({
     enum: OrderPriority,
     example: OrderPriority.HIGH,
-    description: 'Новый приоритет заказа',
+    description: 'New priority',
   })
   @IsOptional()
   @IsEnum(OrderPriority, {
-    message: 'Некорректный приоритет. Доступные: LOW, MEDIUM, HIGH',
+    message: 'Invalid priority. Allowed values: LOW, MEDIUM, HIGH',
   })
   priority?: OrderPriority;
 
   @ApiPropertyOptional({
     example: '2024-12-31T23:59:59.000Z',
-    description: 'Новый крайний срок выполнения',
+    description: 'New deadline',
   })
   @IsOptional()
-  @IsDateString({}, { message: 'Некорректный формат даты' })
+  @IsDateString({}, { message: 'Invalid date format' })
   deadline?: string;
 }

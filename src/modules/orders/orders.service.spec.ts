@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditsService } from '../audits/audits.service';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { OrderStatus, OrderPriority, UserRole } from '@prisma/client';
 
@@ -21,9 +22,11 @@ describe('OrdersService', () => {
     users: {
       findUnique: jest.fn(),
     },
-    orderAuditLogs: {
-      create: jest.fn(),
-    },
+  };
+
+  // OrdersService writes an audit entry on every state change.
+  const mockAuditsService = {
+    createLog: jest.fn(),
   };
 
   const mockOrder = {
@@ -59,6 +62,10 @@ describe('OrdersService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: AuditsService,
+          useValue: mockAuditsService,
+        },
       ],
     }).compile();
 
@@ -73,7 +80,7 @@ describe('OrdersService', () => {
   });
 
   describe('create', () => {
-    it('должен создать заказ для админа/менеджера', async () => {
+    it('creates an order for an admin or manager', async () => {
       const dto = {
         title: 'New Order',
         description: 'Description',
@@ -81,16 +88,15 @@ describe('OrdersService', () => {
       };
 
       mockPrismaService.orders.create.mockResolvedValue(mockOrder);
-      mockPrismaService.orderAuditLogs.create.mockResolvedValue({});
 
       const result = await service.create(dto, 'user-id-1', UserRole.MANAGER);
 
       expect(result).toBeDefined();
       expect(prisma.orders.create).toHaveBeenCalled();
-      expect(prisma.orderAuditLogs.create).toHaveBeenCalled();
+      expect(mockAuditsService.createLog).toHaveBeenCalled();
     });
 
-    it('должен выбросить ForbiddenException для работника', async () => {
+    it('throws ForbiddenException for a worker', async () => {
       const dto = { title: 'New Order' };
 
       await expect(service.create(dto as any, 'user-id-1', UserRole.WORKER)).rejects.toThrow(
@@ -100,7 +106,7 @@ describe('OrdersService', () => {
   });
 
   describe('findOne', () => {
-    it('должен вернуть заказ для админа', async () => {
+    it('returns any order for an admin', async () => {
       mockPrismaService.orders.findUnique.mockResolvedValue(mockOrder);
 
       const result = await service.findOne('order-id-1', 'any-user', UserRole.ADMIN);
@@ -109,7 +115,7 @@ describe('OrdersService', () => {
       expect(result.id).toBe('order-id-1');
     });
 
-    it('должен выбросить NotFoundException если заказ не найден', async () => {
+    it('throws NotFoundException when the order does not exist', async () => {
       mockPrismaService.orders.findUnique.mockResolvedValue(null);
 
       await expect(service.findOne('non-existent', 'user-id', UserRole.ADMIN)).rejects.toThrow(
@@ -117,7 +123,7 @@ describe('OrdersService', () => {
       );
     });
 
-    it('должен выбросить ForbiddenException если работник пытается посмотреть чужой заказ', async () => {
+    it('throws ForbiddenException when a worker reads someone else order', async () => {
       mockPrismaService.orders.findUnique.mockResolvedValue(mockOrder);
 
       await expect(service.findOne('order-id-1', 'other-user', UserRole.WORKER)).rejects.toThrow(
@@ -127,14 +133,13 @@ describe('OrdersService', () => {
   });
 
   describe('changeStatus (FSM)', () => {
-    it('должен изменить статус с NEW на IN_PROGRESS', async () => {
+    it('moves an order from NEW to IN_PROGRESS', async () => {
       const order = { ...mockOrder, status: OrderStatus.NEW };
       mockPrismaService.orders.findUnique.mockResolvedValue(order);
       mockPrismaService.orders.update.mockResolvedValue({
         ...order,
         status: OrderStatus.IN_PROGRESS,
       });
-      mockPrismaService.orderAuditLogs.create.mockResolvedValue({});
 
       const result = await service.changeStatus(
         'order-id-1',
@@ -146,7 +151,7 @@ describe('OrdersService', () => {
       expect(result.status).toBe(OrderStatus.IN_PROGRESS);
     });
 
-    it('должен выбросить BadRequestException при невозможном переходе', async () => {
+    it('throws BadRequestException on an illegal transition', async () => {
       const order = { ...mockOrder, status: OrderStatus.DONE };
       mockPrismaService.orders.findUnique.mockResolvedValue(order);
 
@@ -160,7 +165,7 @@ describe('OrdersService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('должен выбросить ForbiddenException если не исполнитель пытается изменить на IN_PROGRESS', async () => {
+    it('throws ForbiddenException when a non-assignee moves the order to IN_PROGRESS', async () => {
       const order = { ...mockOrder, status: OrderStatus.NEW };
       mockPrismaService.orders.findUnique.mockResolvedValue(order);
 
@@ -176,13 +181,12 @@ describe('OrdersService', () => {
   });
 
   describe('cancel', () => {
-    it('должен отменить заказ с причиной', async () => {
+    it('cancels an order with a reason', async () => {
       mockPrismaService.orders.findUnique.mockResolvedValue(mockOrder);
       mockPrismaService.orders.update.mockResolvedValue({
         ...mockOrder,
         status: OrderStatus.CANCELLED,
       });
-      mockPrismaService.orderAuditLogs.create.mockResolvedValue({});
 
       const result = await service.cancel(
         'order-id-1',
@@ -192,19 +196,17 @@ describe('OrdersService', () => {
       );
 
       expect(result.status).toBe(OrderStatus.CANCELLED);
-      expect(prisma.orderAuditLogs.create).toHaveBeenCalledWith(
+      expect(mockAuditsService.createLog).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            action: 'ORDER_CANCELLED',
-            newValue: expect.objectContaining({
-              cancelReason: 'Test cancellation reason',
-            }),
+          action: 'ORDER_CANCELLED',
+          newValue: expect.objectContaining({
+            cancelReason: 'Test cancellation reason',
           }),
         }),
       );
     });
 
-    it('должен выбросить BadRequestException если заказ уже завершён', async () => {
+    it('throws BadRequestException when the order is already completed', async () => {
       const order = { ...mockOrder, status: OrderStatus.DONE };
       mockPrismaService.orders.findUnique.mockResolvedValue(order);
 
@@ -215,7 +217,7 @@ describe('OrdersService', () => {
   });
 
   describe('assign', () => {
-    it('должен назначить исполнителя', async () => {
+    it('assigns a worker', async () => {
       const user = {
         id: 'user-id-3',
         isActive: true,
@@ -227,7 +229,6 @@ describe('OrdersService', () => {
         ...mockOrder,
         assignedToId: 'user-id-3',
       });
-      mockPrismaService.orderAuditLogs.create.mockResolvedValue({});
 
       const result = await service.assign(
         'order-id-1',
@@ -237,10 +238,10 @@ describe('OrdersService', () => {
       );
 
       expect(result).toBeDefined();
-      expect(prisma.orderAuditLogs.create).toHaveBeenCalled();
+      expect(mockAuditsService.createLog).toHaveBeenCalled();
     });
 
-    it('должен выбросить BadRequestException если пользователь неактивен', async () => {
+    it('throws BadRequestException when the user is inactive', async () => {
       const user = {
         id: 'user-id-3',
         isActive: false,
@@ -256,13 +257,12 @@ describe('OrdersService', () => {
   });
 
   describe('update', () => {
-    it('должен обновить заказ', async () => {
+    it('updates an order', async () => {
       mockPrismaService.orders.findUnique.mockResolvedValue(mockOrder);
       mockPrismaService.orders.update.mockResolvedValue({
         ...mockOrder,
         title: 'Updated Title',
       });
-      mockPrismaService.orderAuditLogs.create.mockResolvedValue({});
 
       const result = await service.update(
         'order-id-1',
@@ -274,7 +274,7 @@ describe('OrdersService', () => {
       expect(result.title).toBe('Updated Title');
     });
 
-    it('должен выбросить BadRequestException если заказ завершён', async () => {
+    it('throws BadRequestException when the order is completed', async () => {
       const order = { ...mockOrder, status: OrderStatus.DONE };
       mockPrismaService.orders.findUnique.mockResolvedValue(order);
 
